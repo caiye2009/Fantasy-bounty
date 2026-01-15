@@ -1,0 +1,51 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bounty-server
+bounty-backend
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/
+*.test
+*.out
+coverage.out
+
+# Build artifacts
+back/bounty-server
+back/bounty-backend
+
+# Docker volumes
+postgres_data/
+
+# Logs
+*.log
+
+# Node.js (for future frontend)
+node_modules/
+dist/
+build/
+.next/
+out/

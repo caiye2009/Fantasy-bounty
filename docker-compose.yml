@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:16-alpine
+    container_name: bounty-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bounty_user
+      POSTGRES_PASSWORD: bounty_pass
+      POSTGRES_DB: bounty_db
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bounty_user -d bounty_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - bounty-network
+
+  # 后端服务
+  backend:
+    build:
+      context: ./back
+      dockerfile: Dockerfile
+    container_name: bounty-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # 数据库配置
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=bounty_user
+      - DB_PASSWORD=bounty_pass
+      - DB_NAME=bounty_db
+      # JWT配置
+      - JWT_SECRET=your-secret-key-change-this-in-production-2024
+      - JWT_ISSUER=bounty-backend
+      - JWT_EXPIRY_HOURS=24
+      # Gin模式
+      - GIN_MODE=release
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - bounty-network
+
+  # 前端服务
+  frontend:
+    build:
+      context: ./front
+      dockerfile: Dockerfile
+    container_name: bounty-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - bounty-network
+
+  # pgAdmin (可选的数据库管理工具)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: bounty-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@bounty.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - bounty-network
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  bounty-network:
+    driver: bridge
