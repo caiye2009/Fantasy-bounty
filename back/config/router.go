@@ -2,6 +2,7 @@ package config
 
 import (
 	"back/internal/auth"
+	"back/internal/bid"
 	"back/internal/bounty"
 	"back/pkg/jwt"
 	"back/pkg/middleware"
@@ -29,6 +30,10 @@ func SetupRouter() *gin.Engine {
 	bountyService := bounty.NewService(bountyRepo)
 	bountyHandler := bounty.NewHandler(bountyService)
 
+	bidRepo := bid.NewRepository(DB)
+	bidService := bid.NewService(bidRepo)
+	bidHandler := bid.NewHandler(bidService)
+
 	// API v1 路由组
 	v1 := router.Group("/api/v1")
 	{
@@ -47,6 +52,15 @@ func SetupRouter() *gin.Engine {
 			bounties.GET("/:id", bountyHandler.GetBounty)      // 获取赏金详情
 			bounties.PUT("/:id", bountyHandler.UpdateBounty)   // 更新赏金
 			bounties.DELETE("/:id", bountyHandler.DeleteBounty) // 删除赏金
+		}
+
+		// Bid 路由 - 需要JWT认证
+		bids := v1.Group("/bids")
+		bids.Use(middleware.JWTAuth(jwtService))
+		{
+			bids.POST("", bidHandler.CreateBid)       // 创建竞标
+			bids.GET("", bidHandler.ListBids)         // 获取竞标列表
+			bids.DELETE("/:id", bidHandler.DeleteBid) // 删除竞标
 		}
 	}
 

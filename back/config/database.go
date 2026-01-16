@@ -1,6 +1,7 @@
 package config
 
 import (
+	"back/internal/bid"
 	"back/internal/bounty"
 	"fmt"
 	"gorm.io/driver/postgres"
@@ -34,7 +35,7 @@ func InitDatabase() error {
 	}
 
 	// 自动迁移数据库表
-	if err := DB.AutoMigrate(&bounty.Bounty{}); err != nil {
+	if err := DB.AutoMigrate(&bounty.Bounty{}, &bid.Bid{}); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 

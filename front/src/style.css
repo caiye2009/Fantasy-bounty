@@ -6,6 +6,16 @@
   box-sizing: border-box;
 }
 
+/* 隐藏滚动条 */
+*::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 body {
   font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   -webkit-font-smoothing: antialiased;

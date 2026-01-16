@@ -6,7 +6,7 @@ const API_BASE = '/api/v1'
  * @param {number} pageSize - 每页数量
  * @returns {Promise<{data: Array, total: number}>}
  */
-export async function fetchBountyList(page = 1, pageSize = 10) {
+export const fetchBountyList = async (page = 1, pageSize = 10) => {
   const response = await fetch(
     `${API_BASE}/bounties?page=${page}&page_size=${pageSize}`
   )
@@ -27,7 +27,7 @@ export async function fetchBountyList(page = 1, pageSize = 10) {
  * @param {number} id - 悬赏ID
  * @returns {Promise<Object>}
  */
-export async function fetchBountyDetail(id) {
+export const fetchBountyDetail = async (id) => {
   const response = await fetch(`${API_BASE}/bounties/${id}`)
 
   if (!response.ok) {
