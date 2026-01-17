@@ -22,7 +22,7 @@ const stats = ref({
 </script>
 
 <template>
-  <div class="w-[80%] mx-auto">
+  <div class="w-[80%] mx-auto py-6">
     <div class="flex gap-8">
       <!-- 左侧个人信息 -->
       <div class="w-80 shrink-0">

@@ -1,6 +1,7 @@
 package bid
 
 import (
+	"back/pkg/middleware"
 	"net/http"
 	"strconv"
 
@@ -28,6 +29,16 @@ func NewHandler(service Service) *Handler {
 // @Failure 400 {object} ErrorResponse
 // @Router /api/v1/bids [post]
 func (h *Handler) CreateBid(c *gin.Context) {
+	// 从 JWT 中获取用户ID
+	userID, exists := middleware.GetUserID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: "user not authenticated",
+		})
+		return
+	}
+
 	var req CreateBidRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -37,7 +48,7 @@ func (h *Handler) CreateBid(c *gin.Context) {
 		return
 	}
 
-	bid, err := h.service.CreateBid(c.Request.Context(), &req)
+	bid, err := h.service.CreateBid(c.Request.Context(), userID, &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,
@@ -88,6 +99,50 @@ func (h *Handler) ListBids(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 
 	bids, total, err := h.service.ListBidsByBountyID(c.Request.Context(), uint(bountyID), page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, BidListResponse{
+		Code:    http.StatusOK,
+		Message: "Success",
+		Data:    bids,
+		Total:   total,
+	})
+}
+
+// ListMyBids 获取我的竞标列表
+// @Summary 获取我的竞标列表
+// @Description 获取当前用户的竞标列表
+// @Tags bid
+// @Produce json
+// @Param status query string false "状态筛选: pending, accepted, rejected, completed"
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(10)
+// @Success 200 {object} BidListResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/bids/my [get]
+func (h *Handler) ListMyBids(c *gin.Context) {
+	// 从 JWT 中获取用户ID
+	userID, exists := middleware.GetUserID(c)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: "user not authenticated",
+		})
+		return
+	}
+
+	status := c.Query("status")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+
+	bids, total, err := h.service.ListBidsByUserID(c.Request.Context(), userID, status, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,

@@ -22,6 +22,8 @@ func InitDatabase() error {
 	dbPassword := getEnv("DB_PASSWORD", "")
 	dbName := getEnv("DB_NAME", "")
 
+	fmt.Printf("Connecting to database: host=%s port=%s user=%s dbname=%s\n", dbHost, dbPort, dbUser, dbName)
+
 	// 构建 PostgreSQL DSN
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable TimeZone=Asia/Shanghai",
 		dbHost, dbPort, dbUser, dbPassword, dbName)
@@ -34,11 +36,21 @@ func InitDatabase() error {
 		return fmt.Errorf("failed to connect database: %w", err)
 	}
 
+	fmt.Println("Database connection established, running AutoMigrate...")
+
 	// 自动迁移数据库表
-	if err := DB.AutoMigrate(&bounty.Bounty{}, &bid.Bid{}); err != nil {
+	if err := DB.AutoMigrate(
+		&bounty.Bounty{},
+		&bounty.BountyWovenSpec{},
+		&bounty.BountyKnittedSpec{},
+		&bid.Bid{},
+		&bid.BidWovenSpec{},
+		&bid.BidKnittedSpec{},
+	); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
+	fmt.Println("AutoMigrate completed successfully - tables created/updated")
 	fmt.Println("Database connected successfully")
 	return nil
 }

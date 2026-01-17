@@ -3,6 +3,7 @@ package bid
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -10,10 +11,11 @@ import (
 
 // Service 竞标业务逻辑层接口
 type Service interface {
-	CreateBid(ctx context.Context, req *CreateBidRequest) (*Bid, error)
+	CreateBid(ctx context.Context, userID uint, req *CreateBidRequest) (*Bid, error)
 	GetBid(ctx context.Context, id string) (*Bid, error)
 	DeleteBid(ctx context.Context, id string) error
 	ListBidsByBountyID(ctx context.Context, bountyID uint, page, pageSize int) ([]Bid, int64, error)
+	ListBidsByUserID(ctx context.Context, userID uint, status string, page, pageSize int) ([]Bid, int64, error)
 }
 
 // service 竞标业务逻辑层实现
@@ -27,11 +29,33 @@ func NewService(repo Repository) Service {
 }
 
 // CreateBid 创建新竞标
-func (s *service) CreateBid(ctx context.Context, req *CreateBidRequest) (*Bid, error) {
+func (s *service) CreateBid(ctx context.Context, userID uint, req *CreateBidRequest) (*Bid, error) {
 	bid := &Bid{
 		ID:       uuid.New().String(),
 		BountyID: req.BountyID,
-		Price:    req.Price,
+		UserID:   userID,
+		BidPrice: req.BidPrice,
+		Status:   "pending",
+	}
+
+	// 处理梭织规格
+	if req.WovenSpec != nil {
+		greigeDate, _ := time.Parse("2006-01-02", req.WovenSpec.GreigeDeliveryDate)
+		bid.WovenSpec = &BidWovenSpec{
+			SizeLength:         req.WovenSpec.SizeLength,
+			GreigeFabricType:   req.WovenSpec.GreigeFabricType,
+			GreigeDeliveryDate: greigeDate,
+		}
+	}
+
+	// 处理针织规格
+	if req.KnittedSpec != nil {
+		greigeDate, _ := time.Parse("2006-01-02", req.KnittedSpec.GreigeDeliveryDate)
+		bid.KnittedSpec = &BidKnittedSpec{
+			SizeWeight:         req.KnittedSpec.SizeWeight,
+			GreigeFabricType:   req.KnittedSpec.GreigeFabricType,
+			GreigeDeliveryDate: greigeDate,
+		}
 	}
 
 	if err := s.repo.Create(ctx, bid); err != nil {
@@ -78,4 +102,17 @@ func (s *service) ListBidsByBountyID(ctx context.Context, bountyID uint, page, p
 
 	offset := (page - 1) * pageSize
 	return s.repo.ListByBountyID(ctx, bountyID, offset, pageSize)
+}
+
+// ListBidsByUserID 根据用户ID获取竞标列表
+func (s *service) ListBidsByUserID(ctx context.Context, userID uint, status string, page, pageSize int) ([]Bid, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 10
+	}
+
+	offset := (page - 1) * pageSize
+	return s.repo.ListByUserID(ctx, userID, status, offset, pageSize)
 }

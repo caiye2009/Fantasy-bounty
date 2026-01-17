@@ -1,13 +1,14 @@
 package bounty
 
 import (
+	"back/pkg/middleware"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
 
-// Handler 赏金处理器
+// Handler 悬赏处理器
 type Handler struct {
 	service Service
 }
@@ -17,17 +18,23 @@ func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
 }
 
-// CreateBounty 创建赏金
-// @Summary 创建赏金
-// @Description 创建新的赏金任务
+// CreateBounty 创建悬赏
+// @Summary 创建悬赏
+// @Description 创建新的悬赏任务
 // @Tags bounty
 // @Accept json
 // @Produce json
-// @Param bounty body CreateBountyRequest true "赏金信息"
+// @Param bounty body CreateBountyRequest true "悬赏信息"
 // @Success 201 {object} BountyResponse
 // @Failure 400 {object} ErrorResponse
 // @Router /api/v1/bounties [post]
 func (h *Handler) CreateBounty(c *gin.Context) {
+	// 临时：使用默认用户ID，跳过JWT验证
+	userID, exists := middleware.GetUserID(c)
+	if !exists {
+		userID = 1 // 默认用户ID
+	}
+
 	var req CreateBountyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -37,7 +44,7 @@ func (h *Handler) CreateBounty(c *gin.Context) {
 		return
 	}
 
-	bounty, err := h.service.CreateBounty(c.Request.Context(), &req)
+	bounty, err := h.service.CreateBounty(c.Request.Context(), userID, &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,
@@ -53,12 +60,12 @@ func (h *Handler) CreateBounty(c *gin.Context) {
 	})
 }
 
-// GetBounty 获取赏金详情
-// @Summary 获取赏金详情
-// @Description 根据 ID 获取赏金详情
+// GetBounty 获取悬赏详情
+// @Summary 获取悬赏详情
+// @Description 根据 ID 获取悬赏详情
 // @Tags bounty
 // @Produce json
-// @Param id path int true "赏金 ID"
+// @Param id path int true "悬赏 ID"
 // @Success 200 {object} BountyResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -94,13 +101,13 @@ func (h *Handler) GetBounty(c *gin.Context) {
 	})
 }
 
-// UpdateBounty 更新赏金
-// @Summary 更新赏金
-// @Description 更新赏金信息
+// UpdateBounty 更新悬赏
+// @Summary 更新悬赏
+// @Description 更新悬赏信息
 // @Tags bounty
 // @Accept json
 // @Produce json
-// @Param id path int true "赏金 ID"
+// @Param id path int true "悬赏 ID"
 // @Param bounty body UpdateBountyRequest true "更新信息"
 // @Success 200 {object} BountyResponse
 // @Failure 400 {object} ErrorResponse
@@ -146,12 +153,12 @@ func (h *Handler) UpdateBounty(c *gin.Context) {
 	})
 }
 
-// DeleteBounty 删除赏金
-// @Summary 删除赏金
-// @Description 删除指定赏金
+// DeleteBounty 删除悬赏
+// @Summary 删除悬赏
+// @Description 删除指定悬赏
 // @Tags bounty
 // @Produce json
-// @Param id path int true "赏金 ID"
+// @Param id path int true "悬赏 ID"
 // @Success 200 {object} ErrorResponse
 // @Failure 400 {object} ErrorResponse
 // @Failure 404 {object} ErrorResponse
@@ -186,9 +193,9 @@ func (h *Handler) DeleteBounty(c *gin.Context) {
 	})
 }
 
-// ListBounties 获取赏金列表
-// @Summary 获取赏金列表
-// @Description 分页获取赏金列表
+// ListBounties 获取悬赏列表
+// @Summary 获取悬赏列表
+// @Description 分页获取悬赏列表
 // @Tags bounty
 // @Produce json
 // @Param page query int false "页码" default(1)
@@ -201,6 +208,33 @@ func (h *Handler) ListBounties(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 
 	bounties, total, err := h.service.ListBounties(c.Request.Context(), page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, BountyListResponse{
+		Code:    http.StatusOK,
+		Message: "Success",
+		Data:    bounties,
+		Total:   total,
+	})
+}
+
+// PeekBounties 预览悬赏列表（公开接口）
+// @Summary 预览悬赏列表
+// @Description 公开接口，仅返回第一页10条数据，不支持筛选
+// @Tags bounty
+// @Produce json
+// @Success 200 {object} BountyListResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /api/v1/bounties/peek [get]
+func (h *Handler) PeekBounties(c *gin.Context) {
+	// 固定只返回第一页，10条数据
+	bounties, total, err := h.service.ListBounties(c.Request.Context(), 1, 10)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,

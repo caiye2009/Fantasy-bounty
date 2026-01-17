@@ -43,15 +43,18 @@ func SetupRouter() *gin.Engine {
 			authGroup.POST("/login", authHandler.Login) // 登录
 		}
 
-		// Bounty 路由 - 需要JWT认证
+		// Bounty 公开路由
+		v1.GET("/bounties/peek", bountyHandler.PeekBounties)
+		v1.POST("/bounties", bountyHandler.CreateBounty) // 临时：不需要token
+
+		// Bounty 保护路由 - 需要JWT认证
 		bounties := v1.Group("/bounties")
 		bounties.Use(middleware.JWTAuth(jwtService))
 		{
-			bounties.POST("", bountyHandler.CreateBounty)      // 创建赏金
-			bounties.GET("", bountyHandler.ListBounties)       // 获取赏金列表
-			bounties.GET("/:id", bountyHandler.GetBounty)      // 获取赏金详情
-			bounties.PUT("/:id", bountyHandler.UpdateBounty)   // 更新赏金
-			bounties.DELETE("/:id", bountyHandler.DeleteBounty) // 删除赏金
+			bounties.GET("", bountyHandler.ListBounties)
+			bounties.GET("/:id", bountyHandler.GetBounty)
+			bounties.PUT("/:id", bountyHandler.UpdateBounty)
+			bounties.DELETE("/:id", bountyHandler.DeleteBounty)
 		}
 
 		// Bid 路由 - 需要JWT认证
@@ -60,6 +63,7 @@ func SetupRouter() *gin.Engine {
 		{
 			bids.POST("", bidHandler.CreateBid)       // 创建竞标
 			bids.GET("", bidHandler.ListBids)         // 获取竞标列表
+			bids.GET("/my", bidHandler.ListMyBids)    // 获取我的竞标列表
 			bids.DELETE("/:id", bidHandler.DeleteBid) // 删除竞标
 		}
 	}
