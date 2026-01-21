@@ -35,7 +35,7 @@ func (s *service) CreateBid(ctx context.Context, userID uint, req *CreateBidRequ
 		BountyID: req.BountyID,
 		UserID:   userID,
 		BidPrice: req.BidPrice,
-		Status:   "pending",
+		Status:   BidStatusPending, // 新创建的投标默认为"审核中"状态
 	}
 
 	// 处理梭织规格
@@ -45,6 +45,7 @@ func (s *service) CreateBid(ctx context.Context, userID uint, req *CreateBidRequ
 			SizeLength:         req.WovenSpec.SizeLength,
 			GreigeFabricType:   req.WovenSpec.GreigeFabricType,
 			GreigeDeliveryDate: greigeDate,
+			DeliveryMethod:     req.WovenSpec.DeliveryMethod,
 		}
 	}
 
@@ -55,6 +56,7 @@ func (s *service) CreateBid(ctx context.Context, userID uint, req *CreateBidRequ
 			SizeWeight:         req.KnittedSpec.SizeWeight,
 			GreigeFabricType:   req.KnittedSpec.GreigeFabricType,
 			GreigeDeliveryDate: greigeDate,
+			DeliveryMethod:     req.KnittedSpec.DeliveryMethod,
 		}
 	}
 
@@ -111,6 +113,11 @@ func (s *service) ListBidsByUserID(ctx context.Context, userID uint, status stri
 	}
 	if pageSize < 1 || pageSize > 100 {
 		pageSize = 10
+	}
+
+	// 验证状态参数（空字符串表示查询所有状态）
+	if status != "" && !IsValidBidStatus(status) {
+		return nil, 0, errors.New("invalid bid status")
 	}
 
 	offset := (page - 1) * pageSize

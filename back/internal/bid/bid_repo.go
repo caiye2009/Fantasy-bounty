@@ -93,7 +93,7 @@ func (r *repository) ListByUserID(ctx context.Context, userID uint, status strin
 	// 获取分页数据，并关联bounty表获取额外信息
 	err := r.db.WithContext(ctx).
 		Table("bids").
-		Select("bids.*, bounties.product_name as bounty_product_name, bounties.bounty_type, bounties.bid_deadline").
+		Select("bids.*, bounties.product_name as bounty_product_name, bounties.product_code as bounty_product_code, bounties.bounty_type, bounties.bid_deadline").
 		Joins("LEFT JOIN bounties ON bids.bounty_id = bounties.id").
 		Where("bids.user_id = ?", userID).
 		Scopes(func(db *gorm.DB) *gorm.DB {

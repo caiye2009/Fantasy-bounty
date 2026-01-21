@@ -11,6 +11,12 @@ func Init() error {
 		return err
 	}
 
+	// 初始化 Elasticsearch
+	if err := InitElasticsearch(); err != nil {
+		fmt.Printf("Warning: Elasticsearch init failed: %v\n", err)
+		// ES 初始化失败不影响服务启动，只是搜索功能不可用
+	}
+
 	// 设置路由
 	router := SetupRouter()
 

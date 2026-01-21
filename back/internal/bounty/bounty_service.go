@@ -53,6 +53,7 @@ func (s *service) CreateBounty(ctx context.Context, userID uint, req *CreateBoun
 	bounty := &Bounty{
 		BountyType:           req.BountyType,
 		ProductName:          req.ProductName,
+		ProductCode:          req.ProductCode,
 		SampleType:           req.SampleType,
 		ExpectedDeliveryDate: expectedDeliveryDate,
 		BidDeadline:          bidDeadline,
@@ -66,6 +67,12 @@ func (s *service) CreateBounty(ctx context.Context, userID uint, req *CreateBoun
 
 	// 根据悬赏类型创建对应规格
 	if req.BountyType == "woven" && req.WovenSpec != nil {
+		// 验证面料成分
+		if req.WovenSpec.Composition != nil {
+			if err := req.WovenSpec.Composition.Validate(); err != nil {
+				return nil, err
+			}
+		}
 		wovenSpec := &BountyWovenSpec{
 			BountyID:       bounty.ID,
 			FabricWeight:   req.WovenSpec.FabricWeight,
@@ -83,19 +90,22 @@ func (s *service) CreateBounty(ctx context.Context, userID uint, req *CreateBoun
 		bounty.WovenSpec = wovenSpec
 	} else if req.BountyType == "knitted" && req.KnittedSpec != nil {
 		knittedSpec := &BountyKnittedSpec{
-			BountyID:         bounty.ID,
-			FactoryArticleNo: req.KnittedSpec.FactoryArticleNo,
-			FabricWeight:     req.KnittedSpec.FabricWeight,
-			FabricWidth:      req.KnittedSpec.FabricWidth,
-			MachineType:      req.KnittedSpec.MachineType,
-			Composition:      req.KnittedSpec.Composition,
-			QuantityKg:       req.KnittedSpec.QuantityKg,
+			BountyID:     bounty.ID,
+			FabricWeight: req.KnittedSpec.FabricWeight,
+			FabricWidth:  req.KnittedSpec.FabricWidth,
+			MachineType:  req.KnittedSpec.MachineType,
+			Composition:  req.KnittedSpec.Composition,
+			Materials:    req.KnittedSpec.Materials,
+			QuantityKg:   req.KnittedSpec.QuantityKg,
 		}
 		if err := s.repo.CreateKnittedSpec(ctx, knittedSpec); err != nil {
 			return nil, err
 		}
 		bounty.KnittedSpec = knittedSpec
 	}
+
+	// 异步同步到 ES
+	SyncToESAsync(bounty)
 
 	return bounty, nil
 }
@@ -125,6 +135,9 @@ func (s *service) UpdateBounty(ctx context.Context, id uint, req *UpdateBountyRe
 	// 更新基本字段
 	if req.ProductName != "" {
 		bounty.ProductName = req.ProductName
+	}
+	if req.ProductCode != "" {
+		bounty.ProductCode = req.ProductCode
 	}
 	if req.SampleType != "" {
 		bounty.SampleType = req.SampleType
@@ -191,30 +204,33 @@ func (s *service) UpdateBounty(ctx context.Context, id uint, req *UpdateBountyRe
 	} else if bounty.BountyType == "knitted" && req.KnittedSpec != nil {
 		if bounty.KnittedSpec == nil {
 			knittedSpec := &BountyKnittedSpec{
-				BountyID:         bounty.ID,
-				FactoryArticleNo: req.KnittedSpec.FactoryArticleNo,
-				FabricWeight:     req.KnittedSpec.FabricWeight,
-				FabricWidth:      req.KnittedSpec.FabricWidth,
-				MachineType:      req.KnittedSpec.MachineType,
-				Composition:      req.KnittedSpec.Composition,
-				QuantityKg:       req.KnittedSpec.QuantityKg,
+				BountyID:     bounty.ID,
+				FabricWeight: req.KnittedSpec.FabricWeight,
+				FabricWidth:  req.KnittedSpec.FabricWidth,
+				MachineType:  req.KnittedSpec.MachineType,
+				Composition:  req.KnittedSpec.Composition,
+				Materials:    req.KnittedSpec.Materials,
+				QuantityKg:   req.KnittedSpec.QuantityKg,
 			}
 			if err := s.repo.CreateKnittedSpec(ctx, knittedSpec); err != nil {
 				return nil, err
 			}
 			bounty.KnittedSpec = knittedSpec
 		} else {
-			bounty.KnittedSpec.FactoryArticleNo = req.KnittedSpec.FactoryArticleNo
 			bounty.KnittedSpec.FabricWeight = req.KnittedSpec.FabricWeight
 			bounty.KnittedSpec.FabricWidth = req.KnittedSpec.FabricWidth
 			bounty.KnittedSpec.MachineType = req.KnittedSpec.MachineType
 			bounty.KnittedSpec.Composition = req.KnittedSpec.Composition
+			bounty.KnittedSpec.Materials = req.KnittedSpec.Materials
 			bounty.KnittedSpec.QuantityKg = req.KnittedSpec.QuantityKg
 			if err := s.repo.UpdateKnittedSpec(ctx, bounty.KnittedSpec); err != nil {
 				return nil, err
 			}
 		}
 	}
+
+	// 异步同步到 ES
+	SyncToESAsync(bounty)
 
 	return bounty, nil
 }
@@ -240,7 +256,14 @@ func (s *service) DeleteBounty(ctx context.Context, id uint) error {
 		}
 	}
 
-	return s.repo.Delete(ctx, id)
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+
+	// 异步从 ES 删除
+	DeleteFromESAsync(id)
+
+	return nil
 }
 
 // ListBounties 获取悬赏列表

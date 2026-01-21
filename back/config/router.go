@@ -4,6 +4,7 @@ import (
 	"back/internal/auth"
 	"back/internal/bid"
 	"back/internal/bounty"
+	"back/internal/search"
 	"back/pkg/jwt"
 	"back/pkg/middleware"
 	"os"
@@ -34,6 +35,10 @@ func SetupRouter() *gin.Engine {
 	bidService := bid.NewService(bidRepo)
 	bidHandler := bid.NewHandler(bidService)
 
+	// 初始化搜索服务
+	searchService := search.NewService()
+	searchHandler := search.NewHandler(searchService)
+
 	// API v1 路由组
 	v1 := router.Group("/api/v1")
 	{
@@ -41,6 +46,13 @@ func SetupRouter() *gin.Engine {
 		authGroup := v1.Group("/auth")
 		{
 			authGroup.POST("/login", authHandler.Login) // 登录
+		}
+
+		// 搜索路由 - 需要JWT认证
+		searchGroup := v1.Group("/search")
+		searchGroup.Use(middleware.JWTAuth(jwtService))
+		{
+			searchGroup.POST("", searchHandler.Search) // 统一搜索接口
 		}
 
 		// Bounty 公开路由

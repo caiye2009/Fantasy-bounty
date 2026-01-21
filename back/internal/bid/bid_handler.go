@@ -120,7 +120,7 @@ func (h *Handler) ListBids(c *gin.Context) {
 // @Description 获取当前用户的竞标列表
 // @Tags bid
 // @Produce json
-// @Param status query string false "状态筛选: pending, accepted, rejected, completed"
+// @Param status query string false "状态筛选: draft, pending, in_progress, pending_acceptance, completed"
 // @Param page query int false "页码" default(1)
 // @Param page_size query int false "每页数量" default(10)
 // @Success 200 {object} BidListResponse

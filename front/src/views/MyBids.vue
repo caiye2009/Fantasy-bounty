@@ -1,13 +1,13 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { fetchMyBids } from '@/api/bid'
 
 // 筛选条件
 const statusOptions = [
   { label: '全部', value: '' },
-  { label: '待审核', value: 'pending' },
-  { label: '已中标', value: 'accepted' },
-  { label: '未中标', value: 'rejected' },
+  { label: '审核中', value: 'pending' },
+  { label: '进行中', value: 'in_progress' },
+  { label: '待验收', value: 'pending_acceptance' },
   { label: '已完成', value: 'completed' }
 ]
 const selectedStatus = ref('')
@@ -25,12 +25,14 @@ const bountyTypeMap = {
 // 加载我的投标列表
 const loadMyBids = async () => {
   loading.value = true
+  myBids.value = [] // 清空旧数据，避免切换状态时闪烁
   try {
     const result = await fetchMyBids(selectedStatus.value, 1, 50)
     myBids.value = result.data.map(item => ({
       id: item.id,
       bountyId: item.bountyId,
       bountyTitle: item.bountyProductName || '未知悬赏',
+      bountyProductCode: item.bountyProductCode || '',
       bountyType: item.bountyType,
       bidTime: formatDateTime(item.createdAt),
       status: item.status,
@@ -77,6 +79,7 @@ watch(selectedStatus, () => {
 
 onMounted(() => {
   loadMyBids()
+  document.addEventListener('keydown', handleKeydown)
 })
 
 const formatMoney = (amount) => {
@@ -85,9 +88,9 @@ const formatMoney = (amount) => {
 
 const getStatusText = (status) => {
   const statusMap = {
-    'pending': '待审核',
-    'accepted': '已中标',
-    'rejected': '未中标',
+    'pending': '审核中',
+    'in_progress': '进行中',
+    'pending_acceptance': '待验收',
     'completed': '已完成'
   }
   return statusMap[status] || status
@@ -100,12 +103,27 @@ const selectedBid = ref(null)
 const openDrawer = (bid) => {
   selectedBid.value = bid
   drawerVisible.value = true
+  // 禁用页面滚动
+  document.body.style.overflow = 'hidden'
 }
 
 const closeDrawer = () => {
   drawerVisible.value = false
   selectedBid.value = null
+  // 恢复页面滚动
+  document.body.style.overflow = ''
 }
+
+// ESC 键关闭抽屉
+const handleKeydown = (e) => {
+  if (e.key === 'Escape' && drawerVisible.value) {
+    closeDrawer()
+  }
+}
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
@@ -183,9 +201,9 @@ const closeDrawer = () => {
                   class="px-3 py-1 rounded-full text-xs font-medium"
                   :class="{
                     'bg-yellow-100 text-yellow-600': bid.status === 'pending',
-                    'bg-green-100 text-green-600': bid.status === 'accepted',
-                    'bg-red-100 text-red-600': bid.status === 'rejected',
-                    'bg-blue-100 text-blue-600': bid.status === 'completed'
+                    'bg-blue-100 text-blue-600': bid.status === 'in_progress',
+                    'bg-orange-100 text-orange-600': bid.status === 'pending_acceptance',
+                    'bg-green-100 text-green-600': bid.status === 'completed'
                   }"
                 >
                   {{ getStatusText(bid.status) }}
@@ -228,7 +246,7 @@ const closeDrawer = () => {
     <Transition name="fade">
       <div
         v-if="drawerVisible"
-        class="fixed inset-0 bg-black/30 z-40"
+        class="fixed inset-0 bg-black/30 z-[100]"
         @click="closeDrawer"
       ></div>
     </Transition>
@@ -237,7 +255,7 @@ const closeDrawer = () => {
     <Transition name="slide">
       <div
         v-if="drawerVisible && selectedBid"
-        class="fixed top-18 bottom-0 right-0 w-[600px] bg-white shadow-2xl z-50 flex flex-col rounded-tl-lg"
+        class="fixed top-18 bottom-0 right-0 w-[600px] bg-white shadow-2xl z-[101] flex flex-col rounded-tl-lg"
       >
         <!-- 抽屉头部 -->
         <div class="flex items-center justify-between p-6 border-b border-gray-100">
@@ -253,7 +271,12 @@ const closeDrawer = () => {
         <!-- 抽屉内容 -->
         <div class="flex-1 overflow-y-auto p-6">
           <!-- 悬赏标题 -->
-          <h3 class="text-xl font-bold text-gray-900 mb-3">{{ selectedBid.bountyTitle }}</h3>
+          <h3 class="text-xl font-bold text-gray-900 mb-2">{{ selectedBid.bountyTitle }}</h3>
+
+          <!-- 产品编码 -->
+          <p v-if="selectedBid.bountyProductCode" class="text-gray-500 text-sm mb-3">
+            <i class="fas fa-barcode mr-2"></i>产品编码：{{ selectedBid.bountyProductCode }}
+          </p>
 
           <!-- 投标时间和状态 -->
           <div class="flex items-center gap-4 mb-4">
@@ -264,9 +287,9 @@ const closeDrawer = () => {
               class="px-3 py-1 rounded-full text-xs font-medium"
               :class="{
                 'bg-yellow-100 text-yellow-600': selectedBid.status === 'pending',
-                'bg-green-100 text-green-600': selectedBid.status === 'accepted',
-                'bg-red-100 text-red-600': selectedBid.status === 'rejected',
-                'bg-blue-100 text-blue-600': selectedBid.status === 'completed'
+                'bg-blue-100 text-blue-600': selectedBid.status === 'in_progress',
+                'bg-orange-100 text-orange-600': selectedBid.status === 'pending_acceptance',
+                'bg-green-100 text-green-600': selectedBid.status === 'completed'
               }"
             >
               {{ getStatusText(selectedBid.status) }}
@@ -307,6 +330,10 @@ const closeDrawer = () => {
                   <span class="text-xs text-gray-500">胚布交期</span>
                   <p class="text-sm font-medium text-gray-800">{{ formatDate(selectedBid.wovenSpec.greigeDeliveryDate) }}</p>
                 </div>
+                <div v-if="selectedBid.wovenSpec.deliveryMethod">
+                  <span class="text-xs text-gray-500">交货方式</span>
+                  <p class="text-sm font-medium text-gray-800">{{ selectedBid.wovenSpec.deliveryMethod }}</p>
+                </div>
               </div>
             </div>
 
@@ -324,6 +351,10 @@ const closeDrawer = () => {
                 <div v-if="selectedBid.knittedSpec.greigeDeliveryDate">
                   <span class="text-xs text-gray-500">胚布交期</span>
                   <p class="text-sm font-medium text-gray-800">{{ formatDate(selectedBid.knittedSpec.greigeDeliveryDate) }}</p>
+                </div>
+                <div v-if="selectedBid.knittedSpec.deliveryMethod">
+                  <span class="text-xs text-gray-500">交货方式</span>
+                  <p class="text-sm font-medium text-gray-800">{{ selectedBid.knittedSpec.deliveryMethod }}</p>
                 </div>
               </div>
             </div>
