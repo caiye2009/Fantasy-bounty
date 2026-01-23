@@ -16,7 +16,7 @@ type BountyDocument struct {
 	ProductCode          string  `json:"product_code,omitempty"`
 	SampleType           string  `json:"sample_type,omitempty"`
 	Status               string  `json:"status"`
-	CreatedBy            uint    `json:"created_by"`
+	CreatedBy            string  `json:"created_by"`
 	CreatedAt            string  `json:"created_at"`
 	UpdatedAt            string  `json:"updated_at"`
 	ExpectedDeliveryDate string  `json:"expected_delivery_date,omitempty"`

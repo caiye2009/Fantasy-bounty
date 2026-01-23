@@ -29,10 +29,10 @@ func NewHandler(service Service) *Handler {
 // @Failure 400 {object} ErrorResponse
 // @Router /api/v1/bounties [post]
 func (h *Handler) CreateBounty(c *gin.Context) {
-	// 临时：使用默认用户ID，跳过JWT验证
-	userID, exists := middleware.GetUserID(c)
+	// 临时：使用默认账号ID，跳过JWT验证
+	accountID, exists := middleware.GetUserID(c)
 	if !exists {
-		userID = 1 // 默认用户ID
+		accountID = "00000000-0000-0000-0000-000000000000" // 默认账号ID
 	}
 
 	var req CreateBountyRequest
@@ -44,7 +44,7 @@ func (h *Handler) CreateBounty(c *gin.Context) {
 		return
 	}
 
-	bounty, err := h.service.CreateBounty(c.Request.Context(), userID, &req)
+	bounty, err := h.service.CreateBounty(c.Request.Context(), accountID, &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,

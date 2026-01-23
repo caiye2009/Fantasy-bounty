@@ -11,11 +11,11 @@ import (
 
 // Service 竞标业务逻辑层接口
 type Service interface {
-	CreateBid(ctx context.Context, userID uint, req *CreateBidRequest) (*Bid, error)
+	CreateBid(ctx context.Context, accountID string, req *CreateBidRequest) (*Bid, error)
 	GetBid(ctx context.Context, id string) (*Bid, error)
 	DeleteBid(ctx context.Context, id string) error
 	ListBidsByBountyID(ctx context.Context, bountyID uint, page, pageSize int) ([]Bid, int64, error)
-	ListBidsByUserID(ctx context.Context, userID uint, status string, page, pageSize int) ([]Bid, int64, error)
+	ListBidsByAccountID(ctx context.Context, accountID string, status string, page, pageSize int) ([]Bid, int64, error)
 }
 
 // service 竞标业务逻辑层实现
@@ -29,13 +29,13 @@ func NewService(repo Repository) Service {
 }
 
 // CreateBid 创建新竞标
-func (s *service) CreateBid(ctx context.Context, userID uint, req *CreateBidRequest) (*Bid, error) {
+func (s *service) CreateBid(ctx context.Context, accountID string, req *CreateBidRequest) (*Bid, error) {
 	bid := &Bid{
-		ID:       uuid.New().String(),
-		BountyID: req.BountyID,
-		UserID:   userID,
-		BidPrice: req.BidPrice,
-		Status:   BidStatusPending, // 新创建的投标默认为"审核中"状态
+		ID:        uuid.New().String(),
+		BountyID:  req.BountyID,
+		AccountID: accountID,
+		BidPrice:  req.BidPrice,
+		Status:    BidStatusPending, // 新创建的投标默认为"审核中"状态
 	}
 
 	// 处理梭织规格
@@ -106,8 +106,8 @@ func (s *service) ListBidsByBountyID(ctx context.Context, bountyID uint, page, p
 	return s.repo.ListByBountyID(ctx, bountyID, offset, pageSize)
 }
 
-// ListBidsByUserID 根据用户ID获取竞标列表
-func (s *service) ListBidsByUserID(ctx context.Context, userID uint, status string, page, pageSize int) ([]Bid, int64, error) {
+// ListBidsByAccountID 根据账号ID获取竞标列表
+func (s *service) ListBidsByAccountID(ctx context.Context, accountID string, status string, page, pageSize int) ([]Bid, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -121,5 +121,5 @@ func (s *service) ListBidsByUserID(ctx context.Context, userID uint, status stri
 	}
 
 	offset := (page - 1) * pageSize
-	return s.repo.ListByUserID(ctx, userID, status, offset, pageSize)
+	return s.repo.ListByAccountID(ctx, accountID, status, offset, pageSize)
 }

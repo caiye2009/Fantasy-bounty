@@ -33,8 +33,8 @@ type Bounty struct {
 	Status string `json:"status" gorm:"type:varchar(50);default:'open'"`
 	// 悬赏状态：open / in_progress / completed / closed
 
-	CreatedBy uint `json:"createdBy" gorm:"not null;index"`
-	// 发布人用户 ID
+	CreatedBy string `json:"createdBy" gorm:"type:uuid;not null;index"`
+	// 发布人账号 ID (Account UUID)
 
 	CreatedAt time.Time `json:"createdAt" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updatedAt" gorm:"autoUpdateTime"`

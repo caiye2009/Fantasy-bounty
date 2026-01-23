@@ -1,6 +1,7 @@
 package bid
 
 import (
+	"back/internal/company"
 	"back/pkg/middleware"
 	"net/http"
 	"strconv"
@@ -10,12 +11,16 @@ import (
 
 // Handler 竞标处理器
 type Handler struct {
-	service Service
+	service        Service
+	companyService company.Service
 }
 
 // NewHandler 创建新的 handler 实例
-func NewHandler(service Service) *Handler {
-	return &Handler{service: service}
+func NewHandler(service Service, companyService company.Service) *Handler {
+	return &Handler{
+		service:        service,
+		companyService: companyService,
+	}
 }
 
 // CreateBid 创建竞标
@@ -29,12 +34,29 @@ func NewHandler(service Service) *Handler {
 // @Failure 400 {object} ErrorResponse
 // @Router /api/v1/bids [post]
 func (h *Handler) CreateBid(c *gin.Context) {
-	// 从 JWT 中获取用户ID
-	userID, exists := middleware.GetUserID(c)
+	// 从 JWT 中获取账号ID（字符串 UUID）
+	accountID, exists := middleware.GetUserID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "user not authenticated",
+		})
+		return
+	}
+
+	// 检查用户是否已认证企业
+	verified, err := h.companyService.IsAccountVerified(c.Request.Context(), accountID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "检查企业认证状态失败",
+		})
+		return
+	}
+	if !verified {
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Code:    http.StatusForbidden,
+			Message: "请先完成企业认证后再进行竞标",
 		})
 		return
 	}
@@ -48,7 +70,7 @@ func (h *Handler) CreateBid(c *gin.Context) {
 		return
 	}
 
-	bid, err := h.service.CreateBid(c.Request.Context(), userID, &req)
+	bid, err := h.service.CreateBid(c.Request.Context(), accountID, &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,
@@ -128,8 +150,8 @@ func (h *Handler) ListBids(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/bids/my [get]
 func (h *Handler) ListMyBids(c *gin.Context) {
-	// 从 JWT 中获取用户ID
-	userID, exists := middleware.GetUserID(c)
+	// 从 JWT 中获取账号ID
+	accountID, exists := middleware.GetUserID(c)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Code:    http.StatusUnauthorized,
@@ -142,7 +164,7 @@ func (h *Handler) ListMyBids(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 
-	bids, total, err := h.service.ListBidsByUserID(c.Request.Context(), userID, status, page, pageSize)
+	bids, total, err := h.service.ListBidsByAccountID(c.Request.Context(), accountID, status, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,

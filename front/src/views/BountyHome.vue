@@ -170,9 +170,9 @@ const handleSubmit = async () => {
   loginError.value = ''
 
   try {
-    const result = await loginWithCode(loginForm.value.phone, loginForm.value.code)
+    await loginWithCode(loginForm.value.phone, loginForm.value.code)
     isLoggedIn.value = true
-    userPhone.value = result.phone
+    userPhone.value = loginForm.value.phone
     showLoginModal.value = false
     loginForm.value = { phone: '', code: '' }
     // 清理倒计时
@@ -295,6 +295,7 @@ const handleLogout = () => {
 
       <!-- 个人中心 -->
       <MyProfile v-else-if="currentPage === 'profile'" />
+
     </main>
 
     <!-- Login Modal (手机号+验证码) -->

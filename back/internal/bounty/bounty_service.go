@@ -10,7 +10,7 @@ import (
 
 // Service 悬赏业务逻辑层接口
 type Service interface {
-	CreateBounty(ctx context.Context, userID uint, req *CreateBountyRequest) (*Bounty, error)
+	CreateBounty(ctx context.Context, accountID string, req *CreateBountyRequest) (*Bounty, error)
 	GetBounty(ctx context.Context, id uint) (*Bounty, error)
 	UpdateBounty(ctx context.Context, id uint, req *UpdateBountyRequest) (*Bounty, error)
 	DeleteBounty(ctx context.Context, id uint) error
@@ -28,7 +28,7 @@ func NewService(repo Repository) Service {
 }
 
 // CreateBounty 创建新悬赏
-func (s *service) CreateBounty(ctx context.Context, userID uint, req *CreateBountyRequest) (*Bounty, error) {
+func (s *service) CreateBounty(ctx context.Context, accountID string, req *CreateBountyRequest) (*Bounty, error) {
 	// 解析投标截止日期
 	bidDeadline, err := time.Parse("2006-01-02", req.BidDeadline)
 	if err != nil {
@@ -57,7 +57,7 @@ func (s *service) CreateBounty(ctx context.Context, userID uint, req *CreateBoun
 		SampleType:           req.SampleType,
 		ExpectedDeliveryDate: expectedDeliveryDate,
 		BidDeadline:          bidDeadline,
-		CreatedBy:            userID,
+		CreatedBy:            accountID,
 		Status:               "open",
 	}
 

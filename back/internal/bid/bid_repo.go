@@ -12,7 +12,7 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*Bid, error)
 	Delete(ctx context.Context, id string) error
 	ListByBountyID(ctx context.Context, bountyID uint, offset, limit int) ([]Bid, int64, error)
-	ListByUserID(ctx context.Context, userID uint, status string, offset, limit int) ([]Bid, int64, error)
+	ListByAccountID(ctx context.Context, accountID string, status string, offset, limit int) ([]Bid, int64, error)
 }
 
 // repository 竞标数据访问层实现
@@ -75,12 +75,12 @@ func (r *repository) ListByBountyID(ctx context.Context, bountyID uint, offset, 
 	return bids, total, nil
 }
 
-// ListByUserID 根据用户ID获取竞标列表（带关联bounty信息和投标规格）
-func (r *repository) ListByUserID(ctx context.Context, userID uint, status string, offset, limit int) ([]Bid, int64, error) {
+// ListByAccountID 根据账号ID获取竞标列表（带关联bounty信息和投标规格）
+func (r *repository) ListByAccountID(ctx context.Context, accountID string, status string, offset, limit int) ([]Bid, int64, error) {
 	var bids []Bid
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&Bid{}).Where("user_id = ?", userID)
+	query := r.db.WithContext(ctx).Model(&Bid{}).Where("account_id = ?", accountID)
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -95,7 +95,7 @@ func (r *repository) ListByUserID(ctx context.Context, userID uint, status strin
 		Table("bids").
 		Select("bids.*, bounties.product_name as bounty_product_name, bounties.product_code as bounty_product_code, bounties.bounty_type, bounties.bid_deadline").
 		Joins("LEFT JOIN bounties ON bids.bounty_id = bounties.id").
-		Where("bids.user_id = ?", userID).
+		Where("bids.account_id = ?", accountID).
 		Scopes(func(db *gorm.DB) *gorm.DB {
 			if status != "" {
 				return db.Where("bids.status = ?", status)

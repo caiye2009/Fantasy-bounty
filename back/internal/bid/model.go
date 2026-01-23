@@ -34,7 +34,7 @@ func IsValidBidStatus(status string) bool {
 type Bid struct {
 	ID        string    `json:"id" gorm:"type:uuid;primaryKey"`
 	BountyID  uint      `json:"bountyId" gorm:"not null;index"`
-	UserID    uint      `json:"userId" gorm:"not null;index"`
+	AccountID string    `json:"accountId" gorm:"type:uuid;not null;index"` // 关联 Account 表
 	BidPrice  float64   `json:"bidPrice" gorm:"type:decimal(10,2);not null"`            // 投标价格
 	Status    string    `json:"status" gorm:"type:varchar(20);default:'pending'"` // pending, in_progress, pending_acceptance, completed
 	CreatedAt time.Time `json:"createdAt" gorm:"autoCreateTime"`

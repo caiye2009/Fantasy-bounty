@@ -54,13 +54,13 @@ func JWTAuth(jwtService *jwt.JWTService) gin.HandlerFunc {
 	}
 }
 
-// GetUserID 从context中获取用户ID
-func GetUserID(c *gin.Context) (uint, bool) {
+// GetUserID 从context中获取用户ID（返回字符串UUID）
+func GetUserID(c *gin.Context) (string, bool) {
 	userID, exists := c.Get("user_id")
 	if !exists {
-		return 0, false
+		return "", false
 	}
-	id, ok := userID.(uint)
+	id, ok := userID.(string)
 	return id, ok
 }
 
