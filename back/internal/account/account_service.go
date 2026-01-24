@@ -9,14 +9,14 @@ import (
 	"gorm.io/gorm"
 )
 
-// generateUsername 生成唯一6位用户名（小写字母+数字）
+// generateUsername 生成用户名：用户+5位随机字符（小写字母+数字）
 func generateUsername() string {
 	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, 6)
+	b := make([]byte, 5)
 	for i := range b {
 		b[i] = charset[rand.Intn(len(charset))]
 	}
-	return string(b)
+	return "用户" + string(b)
 }
 
 type Service interface {

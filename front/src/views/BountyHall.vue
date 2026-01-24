@@ -1,5 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, inject, watch, computed } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Search, ArrowUpNarrowWide, ArrowDownNarrowWide, Phone, Mail, Loader2, Inbox, X, Calendar, Truck, Tag } from 'lucide-vue-next'
 import BountyCard from '@/components/BountyCard.vue'
 import { placeBid } from '@/api/bid'
 import { peekBountyList } from '@/api/bounty'
@@ -73,16 +75,15 @@ const toggleSortOrder = () => {
 }
 
 // 处理排序字段变化（下拉框）
-const handleSortFieldChange = (event) => {
+const handleSortFieldChange = (value) => {
   if (!requireLogin()) return
-  setSort(event.target.value)
+  setSort(value)
   doSearch()
 }
 
 // 处理筛选器变化
-const handleFilterChange = (field, event) => {
+const handleFilterChange = (field, value) => {
   if (!requireLogin()) return
-  const value = event.target.value
   setFilter(field, value || null)
   doSearch()
 }
@@ -94,7 +95,14 @@ const handleClearFilters = () => {
   doSearch()
 }
 
-// 点击搜索框或筛选器时检查登录（未登录则阻止操作并弹出登录框）
+// 下拉框展开前检查登录
+const onSelectVisibleChange = (visible) => {
+  if (visible && !isLoggedIn.value) {
+    openLoginModal()
+  }
+}
+
+// 点击搜索框时检查登录
 const onFilterClick = (event) => {
   if (!isLoggedIn.value) {
     event.preventDefault()
@@ -409,7 +417,7 @@ const closeBidModal = () => {
 
 const submitBid = async () => {
   if (!bidAmount.value || parseFloat(bidAmount.value) <= 0) {
-    alert('请输入有效的投标金额')
+    ElMessage.warning('请输入有效的投标金额')
     return
   }
 
@@ -418,12 +426,12 @@ const submitBid = async () => {
   // 验证必填字段
   if (bountyType === 'woven') {
     if (!wovenSizeLength.value || !wovenGreigeFabricType.value || !wovenGreigeDeliveryDate.value || !wovenDeliveryMethod.value) {
-      alert('请填写完整的梭织规格信息')
+      ElMessage.warning('请填写完整的梭织规格信息')
       return
     }
   } else if (bountyType === 'knitted') {
     if (!knittedSizeWeight.value || !knittedGreigeFabricType.value || !knittedGreigeDeliveryDate.value || !knittedDeliveryMethod.value) {
-      alert('请填写完整的针织规格信息')
+      ElMessage.warning('请填写完整的针织规格信息')
       return
     }
   }
@@ -452,12 +460,12 @@ const submitBid = async () => {
     }
 
     await placeBid(bidData)
-    alert('投标成功！')
+    ElMessage.success('投标成功！')
     closeBidModal()
     closeDrawer()
   } catch (error) {
     console.error('投标失败:', error)
-    alert('投标失败，请重试')
+    ElMessage.error('投标失败，请重试')
   } finally {
     bidSubmitting.value = false
   }
@@ -487,7 +495,7 @@ const handleBid = () => {
               @input="handleSearchInput"
               @keyup.enter="handleSearch"
             >
-            <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+            <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" :size="14" />
           </div>
 
           <!-- 筛选器 -->
@@ -495,106 +503,99 @@ const handleBid = () => {
             <!-- 悬赏类型 -->
             <div class="flex items-center gap-2">
               <span class="text-sm text-gray-600 whitespace-nowrap w-16">类型</span>
-              <select
-                :value="searchState.filters.bounty_type || ''"
+              <el-select
+                :model-value="searchState.filters.bounty_type || ''"
                 @change="handleFilterChange('bounty_type', $event)"
-                @mousedown="onFilterClick"
-                class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white"
+                @visible-change="onSelectVisibleChange"
+                placeholder="全部"
+                class="flex-1"
               >
-                <option v-for="opt in bountyTypeOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </option>
-              </select>
+                <el-option v-for="opt in bountyTypeOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+              </el-select>
             </div>
 
             <!-- 发布时间 -->
             <div v-if="createdAtOptions.length > 1" class="flex items-center gap-2">
               <span class="text-sm text-gray-600 whitespace-nowrap w-16">发布</span>
-              <select
-                :value="searchState.filters.created_at || ''"
+              <el-select
+                :model-value="searchState.filters.created_at || ''"
                 @change="handleFilterChange('created_at', $event)"
-                @mousedown="onFilterClick"
-                class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white"
+                @visible-change="onSelectVisibleChange"
+                placeholder="全部"
+                class="flex-1"
               >
-                <option v-for="opt in createdAtOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </option>
-              </select>
+                <el-option v-for="opt in createdAtOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+              </el-select>
             </div>
 
             <!-- 截止接单 -->
             <div v-if="bidDeadlineOptions.length > 1" class="flex items-center gap-2">
               <span class="text-sm text-gray-600 whitespace-nowrap w-16">截止</span>
-              <select
-                :value="searchState.filters.bid_deadline || ''"
+              <el-select
+                :model-value="searchState.filters.bid_deadline || ''"
                 @change="handleFilterChange('bid_deadline', $event)"
-                @mousedown="onFilterClick"
-                class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white"
+                @visible-change="onSelectVisibleChange"
+                placeholder="全部"
+                class="flex-1"
               >
-                <option v-for="opt in bidDeadlineOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </option>
-              </select>
+                <el-option v-for="opt in bidDeadlineOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+              </el-select>
             </div>
 
             <!-- 需求量(米) - 梭织 -->
             <div v-if="quantityMetersOptions.length > 1" class="flex items-center gap-2">
               <span class="text-sm text-gray-600 whitespace-nowrap w-16">需求(米)</span>
-              <select
-                :value="searchState.filters.quantity_meters || ''"
+              <el-select
+                :model-value="searchState.filters.quantity_meters || ''"
                 @change="handleFilterChange('quantity_meters', $event)"
-                @mousedown="onFilterClick"
-                class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white"
+                @visible-change="onSelectVisibleChange"
+                placeholder="全部"
+                class="flex-1"
               >
-                <option v-for="opt in quantityMetersOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </option>
-              </select>
+                <el-option v-for="opt in quantityMetersOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+              </el-select>
             </div>
 
             <!-- 需求量(kg) - 针织 -->
             <div v-if="quantityKgOptions.length > 1" class="flex items-center gap-2">
               <span class="text-sm text-gray-600 whitespace-nowrap w-16">需求(kg)</span>
-              <select
-                :value="searchState.filters.quantity_kg || ''"
+              <el-select
+                :model-value="searchState.filters.quantity_kg || ''"
                 @change="handleFilterChange('quantity_kg', $event)"
-                @mousedown="onFilterClick"
-                class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white"
+                @visible-change="onSelectVisibleChange"
+                placeholder="全部"
+                class="flex-1"
               >
-                <option v-for="opt in quantityKgOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </option>
-              </select>
+                <el-option v-for="opt in quantityKgOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+              </el-select>
             </div>
           </div>
 
            <!-- 排序方式 -->
           <div class="flex items-center gap-2">
             <span class="text-sm text-gray-600 whitespace-nowrap">排序</span>
-            <select
-              :value="searchState.sort.field"
+            <el-select
+              :model-value="searchState.sort.field"
               @change="handleSortFieldChange"
-              @mousedown="onFilterClick"
-              class="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white"
+              @visible-change="onSelectVisibleChange"
+              class="flex-1"
             >
-              <option v-for="opt in sortOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
-            <button
+              <el-option v-for="opt in sortOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+            </el-select>
+            <el-button
               @click="toggleSortOrder"
-              class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition-colors"
               :title="searchState.sort.order === 'asc' ? '升序' : '降序'"
             >
-              <i :class="['fas', searchState.sort.order === 'asc' ? 'fa-sort-amount-up' : 'fa-sort-amount-down']"></i>
-            </button>
+              <ArrowUpNarrowWide v-if="searchState.sort.order === 'asc'" :size="14" />
+              <ArrowDownNarrowWide v-else :size="14" />
+            </el-button>
           </div>
 
           <!-- 搜索统计 -->
           <div v-if="isLoggedIn" class="mt-4 text-xs text-gray-400">
             共 {{ esTotal }} 条结果
             <span v-if="Object.keys(searchState.filters).length > 0" class="ml-2">
-              · <button @click="handleClearFilters" class="text-blue-500 hover:underline">清除筛选</button>
+              · <el-button type="primary" link size="small" @click="handleClearFilters">清除筛选</el-button>
             </span>
           </div>
         </div>
@@ -626,8 +627,8 @@ const handleBid = () => {
           <div class="border-t border-gray-100 pt-3">
             <h4 class="text-gray-700 font-medium mb-2">联系我们</h4>
             <div class="text-gray-500 text-xs space-y-1">
-              <p><i class="fas fa-phone-alt mr-2"></i>400-123-4567</p>
-              <p><i class="fas fa-envelope mr-2"></i>contact@textilebounty.com</p>
+              <p><Phone class="inline-block mr-2" :size="14" />400-123-4567</p>
+              <p><Mail class="inline-block mr-2" :size="14" />contact@textilebounty.com</p>
             </div>
           </div>
         </div>
@@ -637,13 +638,13 @@ const handleBid = () => {
       <div class="flex-1 min-w-0 flex flex-col gap-5">
         <!-- 加载状态 -->
         <div v-if="esLoading || peekLoading" class="bg-white rounded-lg p-16 shadow-sm text-center">
-          <i class="fas fa-spinner fa-spin text-4xl text-gray-300 mb-4"></i>
+          <Loader2 class="text-gray-300 mb-4 animate-spin mx-auto" :size="40" />
           <p class="text-gray-500">加载中...</p>
         </div>
 
         <!-- 空状态 -->
         <div v-else-if="displayTasks.length === 0" class="bg-white rounded-lg p-16 shadow-sm text-center">
-          <i class="fas fa-inbox text-6xl text-gray-300 mb-6"></i>
+          <Inbox class="text-gray-300 mb-6 mx-auto" :size="60" />
           <h3 class="text-lg font-medium text-gray-600 mb-2">暂无悬赏任务</h3>
           <p class="text-sm text-gray-400">
             {{ isLoggedIn && searchState.query ? '未找到匹配的结果，请尝试其他关键词' : '请稍后再来查看' }}
@@ -664,20 +665,13 @@ const handleBid = () => {
         />
 
         <!-- 分页（登录后显示） -->
-        <div v-if="isLoggedIn && totalPages > 1" class="flex justify-center gap-2 py-4">
-          <button
-            v-for="page in totalPages"
-            :key="page"
-            @click="setPage(page); doSearch()"
-            :class="[
-              'w-8 h-8 rounded text-sm transition-colors',
-              searchState.page === page
-                ? 'bg-blue-500 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            ]"
-          >
-            {{ page }}
-          </button>
+        <div v-if="isLoggedIn && totalPages > 1" class="flex justify-center py-4">
+          <el-pagination
+            :current-page="searchState.page"
+            :page-count="totalPages"
+            layout="prev, pager, next"
+            @current-change="(page) => { setPage(page); doSearch() }"
+          />
         </div>
       </div>
     </div>
@@ -708,7 +702,7 @@ const handleBid = () => {
               @click="closeDrawer"
               class="p-2 hover:bg-gray-100 rounded-full transition-colors shrink-0"
             >
-              <i class="fas fa-times text-gray-500"></i>
+              <X class="text-gray-500" :size="16" />
             </button>
           </div>
         </div>
@@ -843,14 +837,14 @@ const handleBid = () => {
           <div class="grid grid-cols-2 gap-4">
             <div class="bg-orange-50 rounded-lg p-4">
               <div class="flex items-center gap-2 text-orange-600">
-                <i class="fas fa-calendar-alt"></i>
+                <Calendar :size="14" />
                 <span class="text-sm font-medium">投标截止</span>
               </div>
               <p class="text-orange-700 font-semibold mt-1">{{ selectedTask.deadline }}</p>
             </div>
             <div v-if="selectedTask.expectedDeliveryDate" class="bg-green-50 rounded-lg p-4">
               <div class="flex items-center gap-2 text-green-600">
-                <i class="fas fa-truck"></i>
+                <Truck :size="14" />
                 <span class="text-sm font-medium">期望交付</span>
               </div>
               <p class="text-green-700 font-semibold mt-1">{{ formatDate(selectedTask.expectedDeliveryDate) }}</p>
@@ -860,12 +854,13 @@ const handleBid = () => {
 
         <!-- 抽屉底部 -->
         <div class="p-6 border-t border-gray-100">
-          <button
+          <el-button
+            type="primary"
             @click="handleBid"
-            class="w-full py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+            class="!w-full !py-5 !text-base"
           >
             立即投标
-          </button>
+          </el-button>
         </div>
       </div>
     </Transition>
@@ -886,7 +881,7 @@ const handleBid = () => {
               @click="closeBidModal"
               class="p-1.5 hover:bg-gray-100 rounded-full transition-colors"
             >
-              <i class="fas fa-times text-gray-500"></i>
+              <X class="text-gray-500" :size="16" />
             </button>
           </div>
 
@@ -897,7 +892,7 @@ const handleBid = () => {
               <p class="text-sm text-gray-600 mb-1">投标悬赏：</p>
               <p class="font-medium text-gray-800">{{ selectedTask?.title }}</p>
               <p class="text-xs text-blue-600 mt-1">
-                <i class="fas fa-tag mr-1"></i>
+                <Tag class="inline-block mr-1" :size="12" />
                 {{ selectedTask?.bountyType === 'woven' ? '梭织' : '针织' }}
               </p>
             </div>
@@ -907,17 +902,13 @@ const handleBid = () => {
               <label class="block text-sm font-medium text-gray-700 mb-2">
                 投标金额 <span class="text-red-500">*</span>
               </label>
-              <div class="relative">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">¥</span>
-                <input
-                  v-model="bidAmount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="请输入投标金额"
-                  class="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                >
-              </div>
+              <el-input
+                v-model="bidAmount"
+                type="number"
+                placeholder="请输入投标金额"
+              >
+                <template #prefix>¥</template>
+              </el-input>
             </div>
 
             <!-- 梭织规格字段 -->
@@ -926,48 +917,39 @@ const handleBid = () => {
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   尺码（长度/米） <span class="text-red-500">*</span>
                 </label>
-                <input
+                <el-input
                   v-model="wovenSizeLength"
                   type="number"
-                  min="0"
-                  step="0.01"
                   placeholder="请输入尺码长度"
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                >
+                />
               </div>
               <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   胚布类型 <span class="text-red-500">*</span>
                 </label>
-                <select
-                  v-model="wovenGreigeFabricType"
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white"
-                >
-                  <option value="" disabled>请选择胚布类型</option>
-                  <option v-for="opt in greigeFabricTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
+                <el-select v-model="wovenGreigeFabricType" placeholder="请选择胚布类型" class="w-full">
+                  <el-option v-for="opt in greigeFabricTypeOptions" :key="opt" :label="opt" :value="opt" />
+                </el-select>
               </div>
               <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   胚布交期 <span class="text-red-500">*</span>
                 </label>
-                <input
+                <el-date-picker
                   v-model="wovenGreigeDeliveryDate"
                   type="date"
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                >
+                  placeholder="请选择日期"
+                  value-format="YYYY-MM-DD"
+                  class="!w-full"
+                />
               </div>
               <div class="mb-5">
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   交货方式 <span class="text-red-500">*</span>
                 </label>
-                <select
-                  v-model="wovenDeliveryMethod"
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white"
-                >
-                  <option value="" disabled>请选择交货方式</option>
-                  <option v-for="opt in deliveryMethodOptions" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
+                <el-select v-model="wovenDeliveryMethod" placeholder="请选择交货方式" class="w-full">
+                  <el-option v-for="opt in deliveryMethodOptions" :key="opt" :label="opt" :value="opt" />
+                </el-select>
               </div>
             </template>
 
@@ -977,67 +959,57 @@ const handleBid = () => {
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   尺码（重量/kg） <span class="text-red-500">*</span>
                 </label>
-                <input
+                <el-input
                   v-model="knittedSizeWeight"
                   type="number"
-                  min="0"
-                  step="0.01"
                   placeholder="请输入尺码重量"
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                >
+                />
               </div>
               <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   胚布类型 <span class="text-red-500">*</span>
                 </label>
-                <select
-                  v-model="knittedGreigeFabricType"
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white"
-                >
-                  <option value="" disabled>请选择胚布类型</option>
-                  <option v-for="opt in greigeFabricTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
+                <el-select v-model="knittedGreigeFabricType" placeholder="请选择胚布类型" class="w-full">
+                  <el-option v-for="opt in greigeFabricTypeOptions" :key="opt" :label="opt" :value="opt" />
+                </el-select>
               </div>
               <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   胚布交期 <span class="text-red-500">*</span>
                 </label>
-                <input
+                <el-date-picker
                   v-model="knittedGreigeDeliveryDate"
                   type="date"
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                >
+                  placeholder="请选择日期"
+                  value-format="YYYY-MM-DD"
+                  class="!w-full"
+                />
               </div>
               <div class="mb-5">
                 <label class="block text-sm font-medium text-gray-700 mb-2">
                   交货方式 <span class="text-red-500">*</span>
                 </label>
-                <select
-                  v-model="knittedDeliveryMethod"
-                  class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 bg-white"
-                >
-                  <option value="" disabled>请选择交货方式</option>
-                  <option v-for="opt in deliveryMethodOptions" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
+                <el-select v-model="knittedDeliveryMethod" placeholder="请选择交货方式" class="w-full">
+                  <el-option v-for="opt in deliveryMethodOptions" :key="opt" :label="opt" :value="opt" />
+                </el-select>
               </div>
             </template>
           </div>
 
           <!-- Modal 底部 -->
           <div class="flex gap-3 p-5 border-t border-gray-100">
-            <button
-              @click="closeBidModal"
-              class="flex-1 py-2.5 border border-gray-200 text-gray-600 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-            >
+            <el-button @click="closeBidModal" class="!flex-1 !py-5">
               取消
-            </button>
-            <button
+            </el-button>
+            <el-button
+              type="primary"
               @click="submitBid"
               :disabled="bidSubmitting"
-              class="flex-1 py-2.5 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:bg-blue-300"
+              :loading="bidSubmitting"
+              class="!flex-1 !py-5"
             >
               {{ bidSubmitting ? '提交中...' : '确认投标' }}
-            </button>
+            </el-button>
           </div>
         </div>
       </div>

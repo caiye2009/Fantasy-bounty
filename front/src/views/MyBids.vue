@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { Loader2, Tag, Clock, CalendarX, Handshake, Search, X, Barcode, Calendar } from 'lucide-vue-next'
 import { fetchMyBids } from '@/api/bid'
 
 // 筛选条件
@@ -140,14 +141,9 @@ onUnmounted(() => {
           <div class="flex flex-col gap-5">
             <div class="flex items-center justify-between gap-3">
               <span class="text-sm text-gray-600 whitespace-nowrap">投标状态</span>
-              <select
-                v-model="selectedStatus"
-                class="px-3 py-1.5 border border-gray-200 rounded text-sm text-gray-600 focus:outline-none focus:border-blue-500 flex-1"
-              >
-                <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </option>
-              </select>
+              <el-select v-model="selectedStatus" placeholder="全部" class="flex-1">
+                <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+              </el-select>
             </div>
           </div>
         </div>
@@ -172,7 +168,7 @@ onUnmounted(() => {
       <div class="flex-1 min-w-0 flex flex-col gap-5">
         <!-- 加载状态 -->
         <div v-if="loading" class="bg-white rounded-lg p-16 shadow-sm text-center">
-          <i class="fas fa-spinner fa-spin text-4xl text-gray-300 mb-4"></i>
+          <Loader2 class="text-gray-300 mb-4 animate-spin mx-auto" :size="40" />
           <p class="text-gray-500">加载中...</p>
         </div>
 
@@ -189,10 +185,10 @@ onUnmounted(() => {
                 <h3 class="text-lg font-semibold text-gray-800 mb-2">{{ bid.bountyTitle }}</h3>
                 <div class="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500">
                   <span class="flex items-center gap-1">
-                    <i class="fas fa-tag"></i>{{ bountyTypeMap[bid.bountyType] || bid.bountyType }}
+                    <Tag :size="12" />{{ bountyTypeMap[bid.bountyType] || bid.bountyType }}
                   </span>
                   <span class="flex items-center gap-1">
-                    <i class="far fa-clock"></i>投标时间: {{ bid.bidTime }}
+                    <Clock :size="12" />投标时间: {{ bid.bidTime }}
                   </span>
                 </div>
               </div>
@@ -217,26 +213,30 @@ onUnmounted(() => {
             <div class="flex justify-between items-center">
               <div class="flex gap-5 text-xs text-gray-500">
                 <span class="flex items-center gap-1 text-red-500 font-medium">
-                  <i class="far fa-calendar-times"></i>投标截止: {{ bid.deadline }}
+                  <CalendarX :size="12" />投标截止: {{ bid.deadline }}
                 </span>
               </div>
-              <button
-                class="text-blue-500 hover:text-blue-600 text-sm font-medium py-2 px-4 border border-blue-500 rounded transition-colors"
+              <el-button
+                type="primary"
+                plain
+                size="small"
                 @click.stop="openDrawer(bid)"
               >
                 查看详情
-              </button>
+              </el-button>
             </div>
           </div>
         </template>
 
         <!-- 无数据时显示空状态 -->
         <div v-else class="bg-white rounded-lg p-16 shadow-sm text-center">
-          <i class="fas fa-handshake text-6xl text-gray-300 mb-6"></i>
+          <Handshake class="text-gray-300 mb-6 mx-auto" :size="60" />
           <h3 class="text-lg font-medium text-gray-600 mb-2">暂无投标记录</h3>
           <p class="text-sm text-gray-400 mb-6">去悬赏大厅查看需求</p>
-          <router-link to="/" class="inline-block bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium py-2.5 px-6 rounded transition-colors">
-            <i class="fas fa-search mr-2"></i>浏览悬赏
+          <router-link to="/">
+            <el-button type="primary">
+              <Search class="mr-2" :size="14" />浏览悬赏
+            </el-button>
           </router-link>
         </div>
       </div>
@@ -264,7 +264,7 @@ onUnmounted(() => {
             @click="closeDrawer"
             class="p-2 hover:bg-gray-100 rounded-full transition-colors"
           >
-            <i class="fas fa-times text-gray-500"></i>
+            <X class="text-gray-500" :size="16" />
           </button>
         </div>
 
@@ -275,13 +275,13 @@ onUnmounted(() => {
 
           <!-- 产品编码 -->
           <p v-if="selectedBid.bountyProductCode" class="text-gray-500 text-sm mb-3">
-            <i class="fas fa-barcode mr-2"></i>产品编码：{{ selectedBid.bountyProductCode }}
+            <Barcode class="inline-block mr-2" :size="14" />产品编码：{{ selectedBid.bountyProductCode }}
           </p>
 
           <!-- 投标时间和状态 -->
           <div class="flex items-center gap-4 mb-4">
             <p class="text-gray-500 text-sm">
-              <i class="fas fa-clock mr-2"></i>投标时间：{{ selectedBid.bidTime }}
+              <Clock class="inline-block mr-2" :size="14" />投标时间：{{ selectedBid.bidTime }}
             </p>
             <span
               class="px-3 py-1 rounded-full text-xs font-medium"
@@ -369,7 +369,7 @@ onUnmounted(() => {
           <div class="grid grid-cols-1 gap-4">
             <div class="bg-orange-50 rounded-lg p-4">
               <div class="flex items-center gap-2 text-orange-600">
-                <i class="fas fa-calendar-alt"></i>
+                <Calendar :size="14" />
                 <span class="text-sm font-medium">投标截止</span>
               </div>
               <p class="text-orange-700 font-semibold mt-1">{{ selectedBid.deadline }}</p>
@@ -379,12 +379,9 @@ onUnmounted(() => {
 
         <!-- 抽屉底部 -->
         <div class="p-6 border-t border-gray-100">
-          <button
-            @click="closeDrawer"
-            class="w-full py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-          >
+          <el-button @click="closeDrawer" class="!w-full !py-5 !text-base">
             关闭
-          </button>
+          </el-button>
         </div>
       </div>
     </Transition>
