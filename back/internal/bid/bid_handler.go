@@ -34,15 +34,16 @@ func NewHandler(service Service, companyService company.Service) *Handler {
 // @Failure 400 {object} ErrorResponse
 // @Router /api/v1/bids [post]
 func (h *Handler) CreateBid(c *gin.Context) {
-	// 从 JWT 中获取账号ID（字符串 UUID）
-	accountID, exists := middleware.GetUserID(c)
-	if !exists {
+	// 从 RequestContext 中获取账号ID
+	rc := middleware.GetRequestContext(c)
+	if rc == nil || rc.UserID == "" {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "user not authenticated",
 		})
 		return
 	}
+	accountID := rc.UserID
 
 	// 检查用户是否已认证企业
 	verified, err := h.companyService.IsAccountVerified(c.Request.Context(), accountID)
@@ -77,6 +78,14 @@ func (h *Handler) CreateBid(c *gin.Context) {
 			Message: err.Error(),
 		})
 		return
+	}
+
+	// 设置审计信息
+	rc.Action = "bid.create"
+	rc.Resource = "bid"
+	rc.ResourceID = bid.ID
+	rc.Detail = map[string]any{
+		"bounty_id": req.BountyID,
 	}
 
 	c.JSON(http.StatusCreated, BidResponse{
@@ -150,15 +159,16 @@ func (h *Handler) ListBids(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/bids/my [get]
 func (h *Handler) ListMyBids(c *gin.Context) {
-	// 从 JWT 中获取账号ID
-	accountID, exists := middleware.GetUserID(c)
-	if !exists {
+	// 从 RequestContext 中获取账号ID
+	rc := middleware.GetRequestContext(c)
+	if rc == nil || rc.UserID == "" {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "user not authenticated",
 		})
 		return
 	}
+	accountID := rc.UserID
 
 	status := c.Query("status")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -192,6 +202,15 @@ func (h *Handler) ListMyBids(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse
 // @Router /api/v1/bids/{id} [delete]
 func (h *Handler) DeleteBid(c *gin.Context) {
+	rc := middleware.GetRequestContext(c)
+	if rc == nil || rc.UserID == "" {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: "user not authenticated",
+		})
+		return
+	}
+
 	id := c.Param("id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -201,7 +220,8 @@ func (h *Handler) DeleteBid(c *gin.Context) {
 		return
 	}
 
-	err := h.service.DeleteBid(c.Request.Context(), id)
+	// 先查询竞标，校验所有权
+	existingBid, err := h.service.GetBid(c.Request.Context(), id)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		if err.Error() == "bid not found" {
@@ -212,6 +232,29 @@ func (h *Handler) DeleteBid(c *gin.Context) {
 			Message: err.Error(),
 		})
 		return
+	}
+	if existingBid.AccountID != rc.UserID {
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Code:    http.StatusForbidden,
+			Message: "只能删除自己的竞标",
+		})
+		return
+	}
+
+	err = h.service.DeleteBid(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// 设置审计信息
+	if rc := middleware.GetRequestContext(c); rc != nil {
+		rc.Action = "bid.delete"
+		rc.Resource = "bid"
+		rc.ResourceID = id
 	}
 
 	c.JSON(http.StatusOK, ErrorResponse{

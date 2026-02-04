@@ -2,10 +2,11 @@ package config
 
 import (
 	"back/internal/account"
+	"back/internal/audit"
 	"back/internal/bid"
-	"back/internal/bounty"
 	"back/internal/company"
 	"fmt"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -18,11 +19,15 @@ func InitDatabase() error {
 	var err error
 
 	// 从环境变量读取数据库配置
-	dbHost := getEnv("DB_HOST", "")
-	dbPort := getEnv("DB_PORT", "")
-	dbUser := getEnv("DB_USER", "")
+	dbHost := getEnv("DB_HOST", "localhost")
+	dbPort := getEnv("DB_PORT", "5432")
+	dbUser := getEnv("DB_USER", "postgres")
 	dbPassword := getEnv("DB_PASSWORD", "")
-	dbName := getEnv("DB_NAME", "")
+	dbName := getEnv("DB_NAME", "fantasy_bounty")
+
+	if dbPassword == "" {
+		return fmt.Errorf("DB_PASSWORD 环境变量未设置")
+	}
 
 	fmt.Printf("Connecting to database: host=%s port=%s user=%s dbname=%s\n", dbHost, dbPort, dbUser, dbName)
 
@@ -42,9 +47,6 @@ func InitDatabase() error {
 
 	// 自动迁移数据库表
 	if err := DB.AutoMigrate(
-		&bounty.Bounty{},
-		&bounty.BountyWovenSpec{},
-		&bounty.BountyKnittedSpec{},
 		&bid.Bid{},
 		&bid.BidWovenSpec{},
 		&bid.BidKnittedSpec{},
@@ -52,6 +54,7 @@ func InitDatabase() error {
 		&company.Company{},
 		&company.AccountCompany{},
 		&company.CompanyApplication{},
+		&audit.AuditLog{},
 	); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}

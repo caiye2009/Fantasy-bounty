@@ -59,32 +59,24 @@ func (s *service) CreateAccount(ctx context.Context, req *CreateAccountRequest) 
 		return nil, errors.New("手机号加密失败: " + err.Error())
 	}
 
-	// 生成唯一用户名（重试最多10次）
-	var username string
-	for i := 0; i < 10; i++ {
-		username = generateUsername()
-		// 检查是否已存在（通过尝试创建来验证唯一性）
-		break
-	}
-
 	account := &Account{
-		Username:       username,
+		Username:       generateUsername(),
 		PhoneHash:      crypto.Hash(req.Phone),
 		PhoneEncrypted: phoneEncrypted,
 		Status:         "active",
 	}
 
-	if err := s.repo.Create(ctx, account); err != nil {
-		// 如果用户名冲突，重试
-		for i := 0; i < 9; i++ {
-			account.Username = generateUsername()
-			if err2 := s.repo.Create(ctx, account); err2 == nil {
-				break
-			}
-			if i == 8 {
-				return nil, errors.New("创建账号失败，用户名生成冲突")
-			}
+	// 尝试创建，用户名冲突时重试（最多10次）
+	var createErr error
+	for i := 0; i < 10; i++ {
+		createErr = s.repo.Create(ctx, account)
+		if createErr == nil {
+			break
 		}
+		account.Username = generateUsername()
+	}
+	if createErr != nil {
+		return nil, errors.New("创建账号失败，用户名生成冲突")
 	}
 
 	// 填充解密后的手机号用于返回

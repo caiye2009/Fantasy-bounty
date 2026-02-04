@@ -1,11 +1,13 @@
 package company
 
 import (
+	"back/pkg/middleware"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -71,15 +73,16 @@ func (h *Handler) ListCompanies(c *gin.Context) {
 
 // ApplyCompany 提交企业认证申请（图片已在OCR识别阶段上传）
 func (h *Handler) ApplyCompany(c *gin.Context) {
-	// 从JWT中获取当前用户ID（中间件设置的是 user_id）
-	accountID, exists := c.Get("user_id")
-	if !exists {
+	// 从RequestContext获取当前用户ID
+	rc := middleware.GetRequestContext(c)
+	if rc == nil || rc.UserID == "" {
 		c.JSON(http.StatusUnauthorized, ApplicationResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "未登录",
 		})
 		return
 	}
+	accountID := rc.UserID
 
 	// 获取JSON请求体
 	var body struct {
@@ -126,13 +129,20 @@ func (h *Handler) ApplyCompany(c *gin.Context) {
 		BusinessLicenseNo: body.BusinessLicenseNo,
 	}
 
-	app, err := h.service.ApplyCompany(c.Request.Context(), accountID.(string), req, body.ImagePath)
+	app, err := h.service.ApplyCompany(c.Request.Context(), accountID, req, body.ImagePath)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ApplicationResponse{
 			Code:    http.StatusBadRequest,
 			Message: err.Error(),
 		})
 		return
+	}
+
+	// 设置审计信息
+	rc.Action = "company.apply"
+	rc.Resource = "company"
+	rc.Detail = map[string]any{
+		"company_name": body.Name,
 	}
 
 	c.JSON(http.StatusCreated, ApplicationResponse{
@@ -144,9 +154,9 @@ func (h *Handler) ApplyCompany(c *gin.Context) {
 
 // RecognizeLicense 上传营业执照图片进行OCR识别
 func (h *Handler) RecognizeLicense(c *gin.Context) {
-	// 从JWT中获取当前用户ID
-	_, exists := c.Get("user_id")
-	if !exists {
+	// 从RequestContext获取当前用户ID
+	rc := middleware.GetRequestContext(c)
+	if rc == nil || rc.UserID == "" {
 		c.JSON(http.StatusUnauthorized, OCRResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "未登录",
@@ -164,8 +174,8 @@ func (h *Handler) RecognizeLicense(c *gin.Context) {
 		return
 	}
 
-	// 验证文件类型
-	ext := filepath.Ext(file.Filename)
+	// 验证文件类型（忽略大小写）
+	ext := strings.ToLower(filepath.Ext(file.Filename))
 	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".pdf": true}
 	if !allowedExts[ext] {
 		c.JSON(http.StatusBadRequest, OCRResponse{
@@ -208,6 +218,10 @@ func (h *Handler) RecognizeLicense(c *gin.Context) {
 		return
 	}
 
+	// 设置审计信息
+	rc.Action = "company.recognize_license"
+	rc.Resource = "company"
+
 	c.JSON(http.StatusOK, gin.H{
 		"code":    http.StatusOK,
 		"message": "识别成功",
@@ -218,9 +232,9 @@ func (h *Handler) RecognizeLicense(c *gin.Context) {
 
 // GetMyCompanyStatus 获取我的企业认证状态
 func (h *Handler) GetMyCompanyStatus(c *gin.Context) {
-	// 从JWT中获取当前用户ID（中间件设置的是 user_id）
-	accountID, exists := c.Get("user_id")
-	if !exists {
+	// 从RequestContext获取当前用户ID
+	rc := middleware.GetRequestContext(c)
+	if rc == nil || rc.UserID == "" {
 		c.JSON(http.StatusUnauthorized, MyCompanyStatusResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "未登录",
@@ -228,7 +242,7 @@ func (h *Handler) GetMyCompanyStatus(c *gin.Context) {
 		return
 	}
 
-	status, err := h.service.GetMyCompanyStatus(c.Request.Context(), accountID.(string))
+	status, err := h.service.GetMyCompanyStatus(c.Request.Context(), rc.UserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, MyCompanyStatusResponse{
 			Code:    http.StatusInternalServerError,

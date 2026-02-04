@@ -2,7 +2,9 @@ package auth
 
 import (
 	"back/internal/account"
+	"back/pkg/crypto"
 	"back/pkg/jwt"
+	"back/pkg/middleware"
 	"context"
 	"fmt"
 	"math/rand"
@@ -32,6 +34,22 @@ type Handler struct {
 
 // NewHandler 创建新的 handler 实例
 func NewHandler(jwtService *jwt.JWTService, accountService account.Service) *Handler {
+	// 启动后台清理过期验证码（每2分钟执行一次）
+	go func() {
+		ticker := time.NewTicker(2 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			now := time.Now()
+			codeStoreLock.Lock()
+			for phone, entry := range codeStore {
+				if now.After(entry.ExpiresAt) {
+					delete(codeStore, phone)
+				}
+			}
+			codeStoreLock.Unlock()
+		}
+	}()
+
 	return &Handler{
 		jwtService:     jwtService,
 		accountService: accountService,
@@ -75,6 +93,15 @@ func (h *Handler) SendCode(c *gin.Context) {
 	fmt.Printf("🔑 验证码: %s\n", code)
 	fmt.Printf("⏰ 有效期: 1分钟\n")
 	fmt.Println("========================================")
+
+	// 设置审计信息
+	if rc := middleware.GetRequestContext(c); rc != nil {
+		rc.Action = "auth.send_code"
+		rc.Resource = "auth"
+		rc.Detail = map[string]any{
+			"phone_masked": crypto.MaskPhone(req.Phone),
+		}
+	}
 
 	c.JSON(http.StatusOK, SendCodeResponse{
 		Code:    http.StatusOK,
@@ -175,7 +202,7 @@ func (h *Handler) VerifyCode(c *gin.Context) {
 	_ = h.accountService.UpdateLastLogin(ctx, acc.ID)
 
 	// 生成 JWT token
-	token, err := h.jwtService.GenerateToken(acc.ID, acc.Phone)
+	token, err := h.jwtService.GenerateToken(acc.ID, acc.Username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,
@@ -189,6 +216,17 @@ func (h *Handler) VerifyCode(c *gin.Context) {
 		message = "注册成功"
 	}
 
+	// 设置审计信息
+	if rc := middleware.GetRequestContext(c); rc != nil {
+		rc.Action = "auth.verify_code"
+		rc.Resource = "auth"
+		rc.UserID = acc.ID
+		rc.Detail = map[string]any{
+			"phone_masked": crypto.MaskPhone(req.Phone),
+			"is_new_user":  isNewUser,
+		}
+	}
+
 	c.JSON(http.StatusOK, VerifyCodeResponse{
 		Code:      http.StatusOK,
 		Message:   message,
@@ -198,3 +236,4 @@ func (h *Handler) VerifyCode(c *gin.Context) {
 		Username:  acc.Username,
 	})
 }
+

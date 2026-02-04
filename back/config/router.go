@@ -2,11 +2,10 @@ package config
 
 import (
 	"back/internal/account"
+	"back/internal/audit"
 	"back/internal/auth"
 	"back/internal/bid"
-	"back/internal/bounty"
 	"back/internal/company"
-	"back/internal/search"
 	"back/pkg/crypto"
 	"back/pkg/jwt"
 	"back/pkg/middleware"
@@ -18,15 +17,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// SetupRouter 设置路由
-func SetupRouter() *gin.Engine {
+// SetupRouter 设置路由，返回 router 和清理函数
+func SetupRouter() (*gin.Engine, func()) {
 	// 创建 Gin 实例
-	router := gin.Default()
+	router := gin.New()
+	router.Use(gin.Recovery())
+	router.Use(middleware.RequestContextMiddleware()) // global request context
 
 	// 初始化JWT服务
 	jwtSecret := getEnv("JWT_SECRET", "")
-	jwtIssuer := getEnv("JWT_ISSUER", "")
-	jwtExpiryHours := getEnvInt("JWT_EXPIRY_HOURS", 0)
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET 环境变量未设置")
+	}
+	jwtIssuer := getEnv("JWT_ISSUER", "fantasy-bounty")
+	jwtExpiryHours := getEnvInt("JWT_EXPIRY_HOURS", 24)
 	jwtService := jwt.NewJWTService(jwtSecret, jwtIssuer, time.Duration(jwtExpiryHours)*time.Hour)
 
 	// 初始化加密服务
@@ -40,15 +44,17 @@ func SetupRouter() *gin.Engine {
 		log.Fatal("初始化加密服务失败: ", err)
 	}
 
+	// 初始化审计服务
+	auditRepo := audit.NewRepository(DB)
+	auditService := audit.NewService(auditRepo)
+	auditService.Start()
+
 	// 初始化账号服务（需要先初始化，供 auth 使用）
 	accountRepo := account.NewRepository(DB)
 	accountService := account.NewService(accountRepo, cryptoService)
 
 	// 初始化依赖
 	authHandler := auth.NewHandler(jwtService, accountService)
-	bountyRepo := bounty.NewRepository(DB)
-	bountyService := bounty.NewService(bountyRepo)
-	bountyHandler := bounty.NewHandler(bountyService)
 
 	// 初始化企业服务（需要在 bid 之前初始化）
 	companyRepo := company.NewRepository(DB)
@@ -60,57 +66,36 @@ func SetupRouter() *gin.Engine {
 	bidService := bid.NewService(bidRepo)
 	bidHandler := bid.NewHandler(bidService, companyService)
 
-	// 初始化搜索服务
-	searchService := search.NewService()
-	searchHandler := search.NewHandler(searchService)
-
 	// 初始化账号 handler（accountService 已在上面初始化）
 	accountHandler := account.NewHandler(accountService)
 
 	// API v1 路由组
 	v1 := router.Group("/api/v1")
 	{
-		// 认证路由 - 不需要JWT认证
+		// 认证路由 - 不需要JWT认证，但有审计
 		authGroup := v1.Group("/auth")
+		authGroup.Use(middleware.Audit(auditService))
 		{
 			authGroup.POST("/send-code", authHandler.SendCode)     // 发送验证码
 			authGroup.POST("/verify-code", authHandler.VerifyCode) // 验证码登录/注册
 		}
 
-		// 搜索路由 - 需要JWT认证
-		searchGroup := v1.Group("/search")
-		searchGroup.Use(middleware.JWTAuth(jwtService))
-		{
-			searchGroup.POST("", searchHandler.Search) // 统一搜索接口
-		}
+		// 受保护路由 - JWT + 审计
+		protected := v1.Group("")
+		protected.Use(middleware.JWTAuth(jwtService))
+		protected.Use(middleware.Audit(auditService))
 
-		// Bounty 公开路由
-		v1.GET("/bounties/peek", bountyHandler.PeekBounties)
-		v1.POST("/bounties", bountyHandler.CreateBounty) // 临时：不需要token
-
-		// Bounty 保护路由 - 需要JWT认证
-		bounties := v1.Group("/bounties")
-		bounties.Use(middleware.JWTAuth(jwtService))
-		{
-			bounties.GET("", bountyHandler.ListBounties)
-			bounties.GET("/:id", bountyHandler.GetBounty)
-			bounties.PUT("/:id", bountyHandler.UpdateBounty)
-			bounties.DELETE("/:id", bountyHandler.DeleteBounty)
-		}
-
-		// Bid 路由 - 需要JWT认证
-		bids := v1.Group("/bids")
-		bids.Use(middleware.JWTAuth(jwtService))
+		// Bid 路由
+		bids := protected.Group("/bids")
 		{
 			bids.POST("", bidHandler.CreateBid)       // 创建竞标（需要企业认证）
-			bids.GET("", bidHandler.ListBids)         // 获取竞标列表
-			bids.GET("/my", bidHandler.ListMyBids)    // 获取我的竞标列表
-			bids.DELETE("/:id", bidHandler.DeleteBid) // 删除竞标
+			bids.GET("", bidHandler.ListBids)          // 获取竞标列表
+			bids.GET("/my", bidHandler.ListMyBids)     // 获取我的竞标列表
+			bids.DELETE("/:id", bidHandler.DeleteBid)  // 删除竞标
 		}
 
-		// Account 路由 - 需要JWT认证
-		accounts := v1.Group("/accounts")
-		accounts.Use(middleware.JWTAuth(jwtService))
+		// Account 路由
+		accounts := protected.Group("/accounts")
 		{
 			accounts.POST("", accountHandler.CreateAccount)
 			accounts.GET("", accountHandler.ListAccounts)
@@ -119,19 +104,15 @@ func SetupRouter() *gin.Engine {
 			accounts.DELETE("/:id", accountHandler.DeleteAccount)
 		}
 
-		// Company 路由 - 需要JWT认证
-		companies := v1.Group("/companies")
-		companies.Use(middleware.JWTAuth(jwtService))
+		// Company 路由
+		companies := protected.Group("/companies")
 		{
 			companies.GET("", companyHandler.ListCompanies)
 			companies.GET("/:id", companyHandler.GetCompany)
-			// 用户操作
 			companies.POST("/recognize", companyHandler.RecognizeLicense) // 上传营业执照OCR识别
 			companies.POST("/apply", companyHandler.ApplyCompany)         // 提交企业认证申请
 			companies.GET("/my", companyHandler.GetMyCompanyStatus)       // 获取我的企业认证状态
 		}
-
-
 	}
 
 	// 静态文件服务 - 营业执照图片
@@ -144,7 +125,11 @@ func SetupRouter() *gin.Engine {
 		})
 	})
 
-	return router
+	cleanup := func() {
+		auditService.Stop()
+	}
+
+	return router, cleanup
 }
 
 // getEnv 获取环境变量，如果不存在则返回默认值

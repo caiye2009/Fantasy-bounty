@@ -1,6 +1,7 @@
 package account
 
 import (
+	"back/pkg/middleware"
 	"net/http"
 	"strconv"
 
@@ -42,9 +43,19 @@ func (h *Handler) CreateAccount(c *gin.Context) {
 	})
 }
 
-// GetAccount 获取账号
+// GetAccount 获取账号（只能查看自己的）
 func (h *Handler) GetAccount(c *gin.Context) {
+	rc := middleware.GetRequestContext(c)
+	if rc == nil || rc.UserID == "" {
+		c.JSON(http.StatusUnauthorized, AccountResponse{Code: http.StatusUnauthorized, Message: "user not authenticated"})
+		return
+	}
+
 	id := c.Param("id")
+	if id != rc.UserID {
+		c.JSON(http.StatusForbidden, AccountResponse{Code: http.StatusForbidden, Message: "只能查看自己的账号"})
+		return
+	}
 
 	account, err := h.service.GetAccount(c.Request.Context(), id)
 	if err != nil {
@@ -66,9 +77,19 @@ func (h *Handler) GetAccount(c *gin.Context) {
 	})
 }
 
-// UpdateAccount 更新账号
+// UpdateAccount 更新账号（只能更新自己的）
 func (h *Handler) UpdateAccount(c *gin.Context) {
+	rc := middleware.GetRequestContext(c)
+	if rc == nil || rc.UserID == "" {
+		c.JSON(http.StatusUnauthorized, AccountResponse{Code: http.StatusUnauthorized, Message: "user not authenticated"})
+		return
+	}
+
 	id := c.Param("id")
+	if id != rc.UserID {
+		c.JSON(http.StatusForbidden, AccountResponse{Code: http.StatusForbidden, Message: "只能更新自己的账号"})
+		return
+	}
 
 	var req UpdateAccountRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -99,9 +120,19 @@ func (h *Handler) UpdateAccount(c *gin.Context) {
 	})
 }
 
-// DeleteAccount 删除账号
+// DeleteAccount 删除账号（只能删除自己的）
 func (h *Handler) DeleteAccount(c *gin.Context) {
+	rc := middleware.GetRequestContext(c)
+	if rc == nil || rc.UserID == "" {
+		c.JSON(http.StatusUnauthorized, AccountResponse{Code: http.StatusUnauthorized, Message: "user not authenticated"})
+		return
+	}
+
 	id := c.Param("id")
+	if id != rc.UserID {
+		c.JSON(http.StatusForbidden, AccountResponse{Code: http.StatusForbidden, Message: "只能删除自己的账号"})
+		return
+	}
 
 	err := h.service.DeleteAccount(c.Request.Context(), id)
 	if err != nil {

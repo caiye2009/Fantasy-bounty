@@ -44,11 +44,6 @@ type Bid struct {
 	WovenSpec   *BidWovenSpec   `json:"wovenSpec,omitempty" gorm:"foreignKey:BidID"`
 	KnittedSpec *BidKnittedSpec `json:"knittedSpec,omitempty" gorm:"foreignKey:BidID"`
 
-	// 关联字段 - 用于返回时展示悬赏信息（只读，不参与数据库迁移）
-	BountyProductName string    `json:"bountyProductName" gorm:"column:bounty_product_name;->"`
-	BountyProductCode string    `json:"bountyProductCode" gorm:"column:bounty_product_code;->"`
-	BountyType        string    `json:"bountyType" gorm:"column:bounty_type;->"`
-	BidDeadline       time.Time `json:"bidDeadline" gorm:"column:bid_deadline;->"`
 }
 
 // BidWovenSpec 投标-梭织规格
