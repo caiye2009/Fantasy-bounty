@@ -14,7 +14,6 @@ type RequestContext struct {
 	ClientIP   string
 	UserAgent  string
 	StartTime  time.Time
-	UserID     string         // filled by Auth middleware
 	Username   string         // filled by Auth middleware
 	Action     string         // set by handler (optional)
 	Resource   string         // set by handler (optional)

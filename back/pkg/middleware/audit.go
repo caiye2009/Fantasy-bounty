@@ -36,7 +36,7 @@ func Audit(auditService audit.Service) gin.HandlerFunc {
 
 		entry := &audit.AuditLog{
 			RequestID:  rc.RequestID,
-			UserID:     rc.UserID,
+			Username:   rc.Username,
 			Action:     action,
 			Resource:   rc.Resource,
 			ResourceID: rc.ResourceID,
@@ -54,7 +54,7 @@ func Audit(auditService audit.Service) gin.HandlerFunc {
 }
 
 // autoAction generates a default action string from the HTTP method and route path.
-// Example: GET /api/v1/companies -> company.list
+// Example: GET /api/v1/suppliers -> supplier.list
 func autoAction(method, path string) string {
 	if path == "" {
 		return fmt.Sprintf("%s:%s", method, path)

@@ -22,9 +22,8 @@ type VerifyCodeResponse struct {
 	Code      int    `json:"code"`
 	Message   string `json:"message"`
 	Token     string `json:"token,omitempty"`
-	AccountID string `json:"accountId,omitempty"`
+	Username  string `json:"username,omitempty"`
 	IsNewUser bool   `json:"isNewUser"` // 是否新用户（首次注册）
-	Username  string `json:"username,omitempty"` // 用户名
 }
 
 // ErrorResponse 错误响应

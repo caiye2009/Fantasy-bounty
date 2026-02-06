@@ -1,4 +1,4 @@
-package company
+package supplier
 
 import (
 	"context"
@@ -8,19 +8,19 @@ import (
 )
 
 type Service interface {
-	// Company
-	GetCompany(ctx context.Context, id string) (*Company, error)
-	ListCompanies(ctx context.Context, page, pageSize int) ([]Company, int64, error)
+	// Supplier
+	GetSupplier(ctx context.Context, id string) (*Supplier, error)
+	ListSuppliers(ctx context.Context, page, pageSize int) ([]Supplier, int64, error)
 
 	// Application - 用户操作
-	ApplyCompany(ctx context.Context, accountID string, req *ApplyCompanyRequest, licenseImage string) (*CompanyApplication, error)
-	GetMyCompanyStatus(ctx context.Context, accountID string) (*MyCompanyStatus, error)
+	ApplySupplier(ctx context.Context, username string, req *ApplySupplierRequest, licenseImage string) (*SupplierApplication, error)
+	GetMySupplierStatus(ctx context.Context, username string) (*MySupplierStatus, error)
 
 	// OCR识别
 	RecognizeLicense(ctx context.Context, imagePath string) (*OCRResult, error)
 
-	// 企业认证校验（供其他模块调用）
-	IsAccountVerified(ctx context.Context, accountID string) (bool, error)
+	// 供应商认证校验（供其他模块调用）
+	IsUserVerified(ctx context.Context, username string) (bool, error)
 }
 
 type service struct {
@@ -31,20 +31,20 @@ func NewService(repo Repository) Service {
 	return &service{repo: repo}
 }
 
-// ========== Company ==========
+// ========== Supplier ==========
 
-func (s *service) GetCompany(ctx context.Context, id string) (*Company, error) {
-	company, err := s.repo.GetCompanyByID(ctx, id)
+func (s *service) GetSupplier(ctx context.Context, id string) (*Supplier, error) {
+	supplier, err := s.repo.GetSupplierByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("company not found")
+			return nil, errors.New("supplier not found")
 		}
 		return nil, err
 	}
-	return company, nil
+	return supplier, nil
 }
 
-func (s *service) ListCompanies(ctx context.Context, page, pageSize int) ([]Company, int64, error) {
+func (s *service) ListSuppliers(ctx context.Context, page, pageSize int) ([]Supplier, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -53,23 +53,23 @@ func (s *service) ListCompanies(ctx context.Context, page, pageSize int) ([]Comp
 	}
 
 	offset := (page - 1) * pageSize
-	return s.repo.ListCompanies(ctx, offset, pageSize)
+	return s.repo.ListSuppliers(ctx, offset, pageSize)
 }
 
 // ========== Application - 用户操作 ==========
 
-func (s *service) ApplyCompany(ctx context.Context, accountID string, req *ApplyCompanyRequest, licenseImage string) (*CompanyApplication, error) {
-	// 检查是否已经认证过企业
-	_, err := s.repo.GetAccountCompanyByAccountID(ctx, accountID)
+func (s *service) ApplySupplier(ctx context.Context, username string, req *ApplySupplierRequest, licenseImage string) (*SupplierApplication, error) {
+	// 检查是否已经认证过供应商
+	_, err := s.repo.GetUserSupplierByUsername(ctx, username)
 	if err == nil {
-		return nil, errors.New("您已认证过企业，无需重复申请")
+		return nil, errors.New("您已认证过供应商，无需重复申请")
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
 	}
 
 	// 检查是否有待审核的申请
-	_, err = s.repo.GetPendingApplicationByAccountID(ctx, accountID)
+	_, err = s.repo.GetPendingApplicationByUsername(ctx, username)
 	if err == nil {
 		return nil, errors.New("您已有待审核的申请，请等待审核结果")
 	}
@@ -78,8 +78,8 @@ func (s *service) ApplyCompany(ctx context.Context, accountID string, req *Apply
 	}
 
 	// 创建申请
-	app := &CompanyApplication{
-		AccountID:            accountID,
+	app := &SupplierApplication{
+		Username:             username,
 		Name:                 req.Name,
 		BusinessLicenseNo:    req.BusinessLicenseNo,
 		BusinessLicenseImage: licenseImage,
@@ -93,31 +93,31 @@ func (s *service) ApplyCompany(ctx context.Context, accountID string, req *Apply
 	return app, nil
 }
 
-func (s *service) GetMyCompanyStatus(ctx context.Context, accountID string) (*MyCompanyStatus, error) {
-	status := &MyCompanyStatus{
-		HasVerifiedCompany: false,
+func (s *service) GetMySupplierStatus(ctx context.Context, username string) (*MySupplierStatus, error) {
+	status := &MySupplierStatus{
+		HasVerifiedSupplier: false,
 	}
 
-	// 检查是否已认证企业
-	ac, err := s.repo.GetAccountCompanyByAccountID(ctx, accountID)
+	// 检查是否已认证供应商
+	us, err := s.repo.GetUserSupplierByUsername(ctx, username)
 	if err == nil {
-		// 已认证，获取企业信息
-		company, err := s.repo.GetCompanyByID(ctx, ac.CompanyID)
+		// 已认证，获取供应商信息
+		supplier, err := s.repo.GetSupplierByID(ctx, us.SupplierID)
 		if err == nil {
-			status.HasVerifiedCompany = true
-			status.Company = company
+			status.HasVerifiedSupplier = true
+			status.Supplier = supplier
 			return status, nil
 		}
 	}
 
 	// 检查是否有待审核的申请
-	pendingApp, err := s.repo.GetPendingApplicationByAccountID(ctx, accountID)
+	pendingApp, err := s.repo.GetPendingApplicationByUsername(ctx, username)
 	if err == nil {
 		status.PendingApplication = pendingApp
 	}
 
 	// 获取最近一次被拒绝的申请
-	rejectedApp, err := s.repo.GetLatestRejectedByAccountID(ctx, accountID)
+	rejectedApp, err := s.repo.GetLatestRejectedByUsername(ctx, username)
 	if err == nil {
 		status.LatestRejected = rejectedApp
 	}
@@ -141,10 +141,10 @@ func (s *service) RecognizeLicense(ctx context.Context, imagePath string) (*OCRR
 	}, nil
 }
 
-// ========== 企业认证校验 ==========
+// ========== 供应商认证校验 ==========
 
-func (s *service) IsAccountVerified(ctx context.Context, accountID string) (bool, error) {
-	_, err := s.repo.GetAccountCompanyByAccountID(ctx, accountID)
+func (s *service) IsUserVerified(ctx context.Context, username string) (bool, error) {
+	_, err := s.repo.GetUserSupplierByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return false, nil

@@ -6,7 +6,7 @@ import "time"
 type AuditLog struct {
 	ID         string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	RequestID  string    `gorm:"type:varchar(36);index"`
-	UserID     string    `gorm:"type:varchar(36);index"`
+	Username   string    `gorm:"type:varchar(20);index"`
 	Action     string    `gorm:"type:varchar(100);index"`
 	Resource   string    `gorm:"type:varchar(50)"`
 	ResourceID string    `gorm:"type:varchar(36)"`

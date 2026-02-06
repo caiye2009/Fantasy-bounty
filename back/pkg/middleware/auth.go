@@ -49,7 +49,6 @@ func JWTAuth(jwtService *jwt.JWTService) gin.HandlerFunc {
 		// 将用户信息填入 RequestContext
 		rc := GetRequestContext(c)
 		if rc != nil {
-			rc.UserID = claims.UserID
 			rc.Username = claims.Username
 		}
 

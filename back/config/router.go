@@ -1,14 +1,16 @@
 package config
 
 import (
-	"back/internal/account"
 	"back/internal/audit"
 	"back/internal/auth"
 	"back/internal/bid"
-	"back/internal/company"
+	"back/internal/supplier"
+	"back/internal/user"
 	"back/pkg/crypto"
+	"back/pkg/internal_token"
 	"back/pkg/jwt"
 	"back/pkg/middleware"
+	"back/pkg/proxy"
 	"log"
 	"os"
 	"strconv"
@@ -49,25 +51,36 @@ func SetupRouter() (*gin.Engine, func()) {
 	auditService := audit.NewService(auditRepo)
 	auditService.Start()
 
-	// 初始化账号服务（需要先初始化，供 auth 使用）
-	accountRepo := account.NewRepository(DB)
-	accountService := account.NewService(accountRepo, cryptoService)
+	// 初始化用户服务（需要先初始化，供 auth 使用）
+	userRepo := user.NewRepository(DB)
+	userService := user.NewService(userRepo, cryptoService)
 
 	// 初始化依赖
-	authHandler := auth.NewHandler(jwtService, accountService)
+	authHandler := auth.NewHandler(jwtService, userService)
 
-	// 初始化企业服务（需要在 bid 之前初始化）
-	companyRepo := company.NewRepository(DB)
-	companyService := company.NewService(companyRepo)
-	companyHandler := company.NewHandler(companyService)
+	// 初始化供应商服务（需要在 bid 之前初始化）
+	supplierRepo := supplier.NewRepository(DB)
+	supplierService := supplier.NewService(supplierRepo)
+	supplierHandler := supplier.NewHandler(supplierService)
 
-	// 初始化竞标服务（需要企业服务来校验认证状态）
+	// 初始化竞标服务（需要供应商服务来校验认证状态）
 	bidRepo := bid.NewRepository(DB)
 	bidService := bid.NewService(bidRepo)
-	bidHandler := bid.NewHandler(bidService, companyService)
+	bidHandler := bid.NewHandler(bidService, supplierService)
 
-	// 初始化账号 handler（accountService 已在上面初始化）
-	accountHandler := account.NewHandler(accountService)
+	// 初始化用户 handler（userService 已在上面初始化）
+	userHandler := user.NewHandler(userService)
+
+	// 初始化内部系统 token 管理器
+	tokenManager := internal_token.NewManager(
+		getEnv("INTERNAL_API_URL", ""),
+		getEnv("INTERNAL_AUTH_PATH", "/auth/login"),
+		getEnv("INTERNAL_USERNAME", ""),
+		getEnv("INTERNAL_PASSWORD", ""),
+	)
+
+	// 初始化内部系统反向代理
+	internalProxy := proxy.NewInternalProxy(tokenManager, getEnv("INTERNAL_API_URL", ""))
 
 	// API v1 路由组
 	v1 := router.Group("/api/v1")
@@ -88,30 +101,38 @@ func SetupRouter() (*gin.Engine, func()) {
 		// Bid 路由
 		bids := protected.Group("/bids")
 		{
-			bids.POST("", bidHandler.CreateBid)       // 创建竞标（需要企业认证）
-			bids.GET("", bidHandler.ListBids)          // 获取竞标列表
-			bids.GET("/my", bidHandler.ListMyBids)     // 获取我的竞标列表
-			bids.DELETE("/:id", bidHandler.DeleteBid)  // 删除竞标
+			bids.POST("", bidHandler.CreateBid)      // 创建竞标（需要供应商认证）
+			bids.GET("", bidHandler.ListBids)        // 获取竞标列表
+			bids.GET("/my", bidHandler.ListMyBids)   // 获取我的竞标列表
+			bids.DELETE("/:id", bidHandler.DeleteBid) // 删除竞标
 		}
 
-		// Account 路由
-		accounts := protected.Group("/accounts")
+		// User 路由
+		users := protected.Group("/users")
 		{
-			accounts.POST("", accountHandler.CreateAccount)
-			accounts.GET("", accountHandler.ListAccounts)
-			accounts.GET("/:id", accountHandler.GetAccount)
-			accounts.PUT("/:id", accountHandler.UpdateAccount)
-			accounts.DELETE("/:id", accountHandler.DeleteAccount)
+			users.POST("", userHandler.CreateUser)
+			users.GET("", userHandler.ListUsers)
+			users.GET("/:id", userHandler.GetUser)
+			users.PUT("/:id", userHandler.UpdateUser)
+			users.DELETE("/:id", userHandler.DeleteUser)
 		}
 
-		// Company 路由
-		companies := protected.Group("/companies")
+		// Supplier 路由
+		suppliers := protected.Group("/suppliers")
 		{
-			companies.GET("", companyHandler.ListCompanies)
-			companies.GET("/:id", companyHandler.GetCompany)
-			companies.POST("/recognize", companyHandler.RecognizeLicense) // 上传营业执照OCR识别
-			companies.POST("/apply", companyHandler.ApplyCompany)         // 提交企业认证申请
-			companies.GET("/my", companyHandler.GetMyCompanyStatus)       // 获取我的企业认证状态
+			suppliers.GET("", supplierHandler.ListSuppliers)
+			suppliers.GET("/:id", supplierHandler.GetSupplier)
+			suppliers.POST("/recognize", supplierHandler.RecognizeLicense) // 上传营业执照OCR识别
+			suppliers.POST("/apply", supplierHandler.ApplySupplier)        // 提交供应商认证申请
+			suppliers.GET("/my", supplierHandler.GetMySupplierStatus)      // 获取我的供应商认证状态
+		}
+
+		// 内部系统代理路由 - 外部 JWT 认证 + 审计 + 转发到内部系统
+		internalGroup := v1.Group("/internal")
+		internalGroup.Use(middleware.JWTAuth(jwtService))
+		internalGroup.Use(middleware.Audit(auditService))
+		{
+			internalGroup.Any("/*path", internalProxy.Handler())
 		}
 	}
 

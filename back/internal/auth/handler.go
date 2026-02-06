@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"back/internal/account"
+	"back/internal/user"
 	"back/pkg/crypto"
 	"back/pkg/jwt"
 	"back/pkg/middleware"
@@ -28,12 +28,12 @@ type codeEntry struct {
 
 // Handler 认证处理器
 type Handler struct {
-	jwtService     *jwt.JWTService
-	accountService account.Service
+	jwtService  *jwt.JWTService
+	userService user.Service
 }
 
 // NewHandler 创建新的 handler 实例
-func NewHandler(jwtService *jwt.JWTService, accountService account.Service) *Handler {
+func NewHandler(jwtService *jwt.JWTService, userService user.Service) *Handler {
 	// 启动后台清理过期验证码（每2分钟执行一次）
 	go func() {
 		ticker := time.NewTicker(2 * time.Minute)
@@ -51,8 +51,8 @@ func NewHandler(jwtService *jwt.JWTService, accountService account.Service) *Han
 	}()
 
 	return &Handler{
-		jwtService:     jwtService,
-		accountService: accountService,
+		jwtService:  jwtService,
+		userService: userService,
 	}
 }
 
@@ -89,9 +89,9 @@ func (h *Handler) SendCode(c *gin.Context) {
 
 	// 打印验证码到控制台（模拟短信发送）
 	fmt.Println("========================================")
-	fmt.Printf("📱 手机号: %s\n", req.Phone)
-	fmt.Printf("🔑 验证码: %s\n", code)
-	fmt.Printf("⏰ 有效期: 1分钟\n")
+	fmt.Printf("手机号: %s\n", req.Phone)
+	fmt.Printf("验证码: %s\n", code)
+	fmt.Printf("有效期: 1分钟\n")
 	fmt.Println("========================================")
 
 	// 设置审计信息
@@ -172,25 +172,25 @@ func (h *Handler) VerifyCode(c *gin.Context) {
 	ctx := context.Background()
 	isNewUser := false
 
-	// 查询账号是否存在
-	acc, err := h.accountService.GetAccountByPhone(ctx, req.Phone)
+	// 查询用户是否存在
+	u, err := h.userService.GetUserByPhone(ctx, req.Phone)
 	if err != nil {
-		// 账号不存在，自动注册
-		acc, err = h.accountService.CreateAccount(ctx, &account.CreateAccountRequest{
+		// 用户不存在，自动注册
+		u, err = h.userService.CreateUser(ctx, &user.CreateUserRequest{
 			Phone: req.Phone,
 		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, ErrorResponse{
 				Code:    http.StatusInternalServerError,
-				Message: "创建账号失败: " + err.Error(),
+				Message: "创建用户失败: " + err.Error(),
 			})
 			return
 		}
 		isNewUser = true
 	}
 
-	// 检查账号状态
-	if acc.Status != "active" {
+	// 检查用户状态
+	if u.Status != "active" {
 		c.JSON(http.StatusForbidden, ErrorResponse{
 			Code:    http.StatusForbidden,
 			Message: "账号已被禁用",
@@ -199,10 +199,10 @@ func (h *Handler) VerifyCode(c *gin.Context) {
 	}
 
 	// 更新最后登录时间
-	_ = h.accountService.UpdateLastLogin(ctx, acc.ID)
+	_ = h.userService.UpdateLastLogin(ctx, u.ID)
 
-	// 生成 JWT token
-	token, err := h.jwtService.GenerateToken(acc.ID, acc.Username)
+	// 生成 JWT token（只使用 username）
+	token, err := h.jwtService.GenerateToken(u.Username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,
@@ -220,7 +220,7 @@ func (h *Handler) VerifyCode(c *gin.Context) {
 	if rc := middleware.GetRequestContext(c); rc != nil {
 		rc.Action = "auth.verify_code"
 		rc.Resource = "auth"
-		rc.UserID = acc.ID
+		rc.Username = u.Username
 		rc.Detail = map[string]any{
 			"phone_masked": crypto.MaskPhone(req.Phone),
 			"is_new_user":  isNewUser,
@@ -231,9 +231,7 @@ func (h *Handler) VerifyCode(c *gin.Context) {
 		Code:      http.StatusOK,
 		Message:   message,
 		Token:     token,
-		AccountID: acc.ID,
+		Username:  u.Username,
 		IsNewUser: isNewUser,
-		Username:  acc.Username,
 	})
 }
-

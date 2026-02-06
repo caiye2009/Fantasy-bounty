@@ -1,7 +1,7 @@
 package bid
 
 import (
-	"back/internal/company"
+	"back/internal/supplier"
 	"back/pkg/middleware"
 	"net/http"
 	"strconv"
@@ -11,15 +11,15 @@ import (
 
 // Handler 竞标处理器
 type Handler struct {
-	service        Service
-	companyService company.Service
+	service         Service
+	supplierService supplier.Service
 }
 
 // NewHandler 创建新的 handler 实例
-func NewHandler(service Service, companyService company.Service) *Handler {
+func NewHandler(service Service, supplierService supplier.Service) *Handler {
 	return &Handler{
-		service:        service,
-		companyService: companyService,
+		service:         service,
+		supplierService: supplierService,
 	}
 }
 
@@ -34,30 +34,30 @@ func NewHandler(service Service, companyService company.Service) *Handler {
 // @Failure 400 {object} ErrorResponse
 // @Router /api/v1/bids [post]
 func (h *Handler) CreateBid(c *gin.Context) {
-	// 从 RequestContext 中获取账号ID
+	// 从 RequestContext 中获取用户名
 	rc := middleware.GetRequestContext(c)
-	if rc == nil || rc.UserID == "" {
+	if rc == nil || rc.Username == "" {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "user not authenticated",
 		})
 		return
 	}
-	accountID := rc.UserID
+	username := rc.Username
 
-	// 检查用户是否已认证企业
-	verified, err := h.companyService.IsAccountVerified(c.Request.Context(), accountID)
+	// 检查用户是否已认证供应商
+	verified, err := h.supplierService.IsUserVerified(c.Request.Context(), username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,
-			Message: "检查企业认证状态失败",
+			Message: "检查供应商认证状态失败",
 		})
 		return
 	}
 	if !verified {
 		c.JSON(http.StatusForbidden, ErrorResponse{
 			Code:    http.StatusForbidden,
-			Message: "请先完成企业认证后再进行竞标",
+			Message: "请先完成供应商认证后再进行竞标",
 		})
 		return
 	}
@@ -71,7 +71,7 @@ func (h *Handler) CreateBid(c *gin.Context) {
 		return
 	}
 
-	bid, err := h.service.CreateBid(c.Request.Context(), accountID, &req)
+	bid, err := h.service.CreateBid(c.Request.Context(), username, &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,
@@ -159,22 +159,22 @@ func (h *Handler) ListBids(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/bids/my [get]
 func (h *Handler) ListMyBids(c *gin.Context) {
-	// 从 RequestContext 中获取账号ID
+	// 从 RequestContext 中获取用户名
 	rc := middleware.GetRequestContext(c)
-	if rc == nil || rc.UserID == "" {
+	if rc == nil || rc.Username == "" {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "user not authenticated",
 		})
 		return
 	}
-	accountID := rc.UserID
+	username := rc.Username
 
 	status := c.Query("status")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 
-	bids, total, err := h.service.ListBidsByAccountID(c.Request.Context(), accountID, status, page, pageSize)
+	bids, total, err := h.service.ListBidsByUsername(c.Request.Context(), username, status, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,
@@ -203,7 +203,7 @@ func (h *Handler) ListMyBids(c *gin.Context) {
 // @Router /api/v1/bids/{id} [delete]
 func (h *Handler) DeleteBid(c *gin.Context) {
 	rc := middleware.GetRequestContext(c)
-	if rc == nil || rc.UserID == "" {
+	if rc == nil || rc.Username == "" {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "user not authenticated",
@@ -233,7 +233,7 @@ func (h *Handler) DeleteBid(c *gin.Context) {
 		})
 		return
 	}
-	if existingBid.AccountID != rc.UserID {
+	if existingBid.Username != rc.Username {
 		c.JSON(http.StatusForbidden, ErrorResponse{
 			Code:    http.StatusForbidden,
 			Message: "只能删除自己的竞标",

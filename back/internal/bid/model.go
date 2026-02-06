@@ -34,8 +34,8 @@ func IsValidBidStatus(status string) bool {
 type Bid struct {
 	ID        string    `json:"id" gorm:"type:uuid;primaryKey"`
 	BountyID  uint      `json:"bountyId" gorm:"not null;index"`
-	AccountID string    `json:"accountId" gorm:"type:uuid;not null;index"` // 关联 Account 表
-	BidPrice  float64   `json:"bidPrice" gorm:"type:decimal(10,2);not null"`            // 投标价格
+	Username  string    `json:"username" gorm:"type:varchar(20);not null;index"` // 关联用户名
+	BidPrice  float64   `json:"bidPrice" gorm:"type:decimal(10,2);not null"`     // 投标价格
 	Status    string    `json:"status" gorm:"type:varchar(20);default:'pending'"` // pending, in_progress, pending_acceptance, completed
 	CreatedAt time.Time `json:"createdAt" gorm:"autoCreateTime"`
 	UpdatedAt time.Time `json:"updatedAt" gorm:"autoUpdateTime"`
@@ -43,7 +43,6 @@ type Bid struct {
 	// 关联规格 - 根据悬赏类型只会有一个有值
 	WovenSpec   *BidWovenSpec   `json:"wovenSpec,omitempty" gorm:"foreignKey:BidID"`
 	KnittedSpec *BidKnittedSpec `json:"knittedSpec,omitempty" gorm:"foreignKey:BidID"`
-
 }
 
 // BidWovenSpec 投标-梭织规格
@@ -68,8 +67,8 @@ type BidKnittedSpec struct {
 
 // CreateBidRequest 创建投标请求
 type CreateBidRequest struct {
-	BountyID    uint                      `json:"bountyId" binding:"required"`
-	BidPrice    float64                   `json:"bidPrice" binding:"required,gt=0"`
+	BountyID    uint                         `json:"bountyId" binding:"required"`
+	BidPrice    float64                      `json:"bidPrice" binding:"required,gt=0"`
 	WovenSpec   *CreateBidWovenSpecRequest   `json:"wovenSpec"`
 	KnittedSpec *CreateBidKnittedSpecRequest `json:"knittedSpec"`
 }

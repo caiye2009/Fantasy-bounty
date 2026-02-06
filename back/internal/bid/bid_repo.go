@@ -12,7 +12,7 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*Bid, error)
 	Delete(ctx context.Context, id string) error
 	ListByBountyID(ctx context.Context, bountyID uint, offset, limit int) ([]Bid, int64, error)
-	ListByAccountID(ctx context.Context, accountID string, status string, offset, limit int) ([]Bid, int64, error)
+	ListByUsername(ctx context.Context, username string, status string, offset, limit int) ([]Bid, int64, error)
 }
 
 // repository 竞标数据访问层实现
@@ -75,12 +75,12 @@ func (r *repository) ListByBountyID(ctx context.Context, bountyID uint, offset, 
 	return bids, total, nil
 }
 
-// ListByAccountID 根据账号ID获取竞标列表（带关联bounty信息和投标规格）
-func (r *repository) ListByAccountID(ctx context.Context, accountID string, status string, offset, limit int) ([]Bid, int64, error) {
+// ListByUsername 根据用户名获取竞标列表（带关联bounty信息和投标规格）
+func (r *repository) ListByUsername(ctx context.Context, username string, status string, offset, limit int) ([]Bid, int64, error) {
 	var bids []Bid
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&Bid{}).Where("account_id = ?", accountID)
+	query := r.db.WithContext(ctx).Model(&Bid{}).Where("username = ?", username)
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -94,7 +94,7 @@ func (r *repository) ListByAccountID(ctx context.Context, accountID string, stat
 	dataQuery := r.db.WithContext(ctx).Model(&Bid{}).
 		Preload("WovenSpec").
 		Preload("KnittedSpec").
-		Where("account_id = ?", accountID)
+		Where("username = ?", username)
 	if status != "" {
 		dataQuery = dataQuery.Where("status = ?", status)
 	}

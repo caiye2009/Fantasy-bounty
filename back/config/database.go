@@ -1,10 +1,10 @@
 package config
 
 import (
-	"back/internal/account"
 	"back/internal/audit"
 	"back/internal/bid"
-	"back/internal/company"
+	"back/internal/supplier"
+	"back/internal/user"
 	"fmt"
 
 	"gorm.io/driver/postgres"
@@ -50,10 +50,10 @@ func InitDatabase() error {
 		&bid.Bid{},
 		&bid.BidWovenSpec{},
 		&bid.BidKnittedSpec{},
-		&account.Account{},
-		&company.Company{},
-		&company.AccountCompany{},
-		&company.CompanyApplication{},
+		&user.User{},
+		&supplier.Supplier{},
+		&supplier.UserSupplier{},
+		&supplier.SupplierApplication{},
 		&audit.AuditLog{},
 	); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)

@@ -1,4 +1,4 @@
-package company
+package supplier
 
 import (
 	"back/pkg/middleware"
@@ -21,68 +21,68 @@ func NewHandler(service Service) *Handler {
 	return &Handler{service: service}
 }
 
-// ========== Company Handlers ==========
+// ========== Supplier Handlers ==========
 
-// GetCompany 获取企业
-func (h *Handler) GetCompany(c *gin.Context) {
+// GetSupplier 获取供应商
+func (h *Handler) GetSupplier(c *gin.Context) {
 	id := c.Param("id")
 
-	company, err := h.service.GetCompany(c.Request.Context(), id)
+	supplier, err := h.service.GetSupplier(c.Request.Context(), id)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
-		if err.Error() == "company not found" {
+		if err.Error() == "supplier not found" {
 			statusCode = http.StatusNotFound
 		}
-		c.JSON(statusCode, CompanyResponse{
+		c.JSON(statusCode, SupplierResponse{
 			Code:    statusCode,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, CompanyResponse{
+	c.JSON(http.StatusOK, SupplierResponse{
 		Code:    http.StatusOK,
 		Message: "Success",
-		Data:    company,
+		Data:    supplier,
 	})
 }
 
-// ListCompanies 获取企业列表
-func (h *Handler) ListCompanies(c *gin.Context) {
+// ListSuppliers 获取供应商列表
+func (h *Handler) ListSuppliers(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
 
-	companies, total, err := h.service.ListCompanies(c.Request.Context(), page, pageSize)
+	suppliers, total, err := h.service.ListSuppliers(c.Request.Context(), page, pageSize)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, CompanyListResponse{
+		c.JSON(http.StatusInternalServerError, SupplierListResponse{
 			Code:    http.StatusInternalServerError,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, CompanyListResponse{
+	c.JSON(http.StatusOK, SupplierListResponse{
 		Code:    http.StatusOK,
 		Message: "Success",
-		Data:    companies,
+		Data:    suppliers,
 		Total:   total,
 	})
 }
 
 // ========== Application Handlers - 用户操作 ==========
 
-// ApplyCompany 提交企业认证申请（图片已在OCR识别阶段上传）
-func (h *Handler) ApplyCompany(c *gin.Context) {
-	// 从RequestContext获取当前用户ID
+// ApplySupplier 提交供应商认证申请（图片已在OCR识别阶段上传）
+func (h *Handler) ApplySupplier(c *gin.Context) {
+	// 从RequestContext获取当前用户
 	rc := middleware.GetRequestContext(c)
-	if rc == nil || rc.UserID == "" {
+	if rc == nil || rc.Username == "" {
 		c.JSON(http.StatusUnauthorized, ApplicationResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "未登录",
 		})
 		return
 	}
-	accountID := rc.UserID
+	username := rc.Username
 
 	// 获取JSON请求体
 	var body struct {
@@ -101,7 +101,7 @@ func (h *Handler) ApplyCompany(c *gin.Context) {
 	if body.Name == "" || body.BusinessLicenseNo == "" {
 		c.JSON(http.StatusBadRequest, ApplicationResponse{
 			Code:    http.StatusBadRequest,
-			Message: "企业名称和营业执照号不能为空",
+			Message: "供应商名称和营业执照号不能为空",
 		})
 		return
 	}
@@ -124,12 +124,12 @@ func (h *Handler) ApplyCompany(c *gin.Context) {
 	}
 
 	// 创建申请
-	req := &ApplyCompanyRequest{
+	req := &ApplySupplierRequest{
 		Name:              body.Name,
 		BusinessLicenseNo: body.BusinessLicenseNo,
 	}
 
-	app, err := h.service.ApplyCompany(c.Request.Context(), accountID, req, body.ImagePath)
+	app, err := h.service.ApplySupplier(c.Request.Context(), username, req, body.ImagePath)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ApplicationResponse{
 			Code:    http.StatusBadRequest,
@@ -139,10 +139,10 @@ func (h *Handler) ApplyCompany(c *gin.Context) {
 	}
 
 	// 设置审计信息
-	rc.Action = "company.apply"
-	rc.Resource = "company"
+	rc.Action = "supplier.apply"
+	rc.Resource = "supplier"
 	rc.Detail = map[string]any{
-		"company_name": body.Name,
+		"supplier_name": body.Name,
 	}
 
 	c.JSON(http.StatusCreated, ApplicationResponse{
@@ -154,9 +154,9 @@ func (h *Handler) ApplyCompany(c *gin.Context) {
 
 // RecognizeLicense 上传营业执照图片进行OCR识别
 func (h *Handler) RecognizeLicense(c *gin.Context) {
-	// 从RequestContext获取当前用户ID
+	// 从RequestContext获取当前用户
 	rc := middleware.GetRequestContext(c)
-	if rc == nil || rc.UserID == "" {
+	if rc == nil || rc.Username == "" {
 		c.JSON(http.StatusUnauthorized, OCRResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "未登录",
@@ -219,8 +219,8 @@ func (h *Handler) RecognizeLicense(c *gin.Context) {
 	}
 
 	// 设置审计信息
-	rc.Action = "company.recognize_license"
-	rc.Resource = "company"
+	rc.Action = "supplier.recognize_license"
+	rc.Resource = "supplier"
 
 	c.JSON(http.StatusOK, gin.H{
 		"code":    http.StatusOK,
@@ -230,31 +230,30 @@ func (h *Handler) RecognizeLicense(c *gin.Context) {
 	})
 }
 
-// GetMyCompanyStatus 获取我的企业认证状态
-func (h *Handler) GetMyCompanyStatus(c *gin.Context) {
-	// 从RequestContext获取当前用户ID
+// GetMySupplierStatus 获取我的供应商认证状态
+func (h *Handler) GetMySupplierStatus(c *gin.Context) {
+	// 从RequestContext获取当前用户
 	rc := middleware.GetRequestContext(c)
-	if rc == nil || rc.UserID == "" {
-		c.JSON(http.StatusUnauthorized, MyCompanyStatusResponse{
+	if rc == nil || rc.Username == "" {
+		c.JSON(http.StatusUnauthorized, MySupplierStatusResponse{
 			Code:    http.StatusUnauthorized,
 			Message: "未登录",
 		})
 		return
 	}
 
-	status, err := h.service.GetMyCompanyStatus(c.Request.Context(), rc.UserID)
+	status, err := h.service.GetMySupplierStatus(c.Request.Context(), rc.Username)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, MyCompanyStatusResponse{
+		c.JSON(http.StatusInternalServerError, MySupplierStatusResponse{
 			Code:    http.StatusInternalServerError,
 			Message: err.Error(),
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, MyCompanyStatusResponse{
+	c.JSON(http.StatusOK, MySupplierStatusResponse{
 		Code:    http.StatusOK,
 		Message: "Success",
 		Data:    status,
 	})
 }
-

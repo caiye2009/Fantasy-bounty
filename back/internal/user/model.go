@@ -1,4 +1,4 @@
-package account
+package user
 
 import (
 	"time"
@@ -6,8 +6,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// Account 账号表
-type Account struct {
+// User 用户表
+type User struct {
 	ID             string         `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	Username       string         `json:"username" gorm:"type:varchar(20);uniqueIndex"`            // 唯一用户名（自动生成6位）
 	PhoneHash      string         `json:"-" gorm:"type:varchar(64);not null;uniqueIndex"`          // 手机号哈希（用于查询索引）
@@ -21,31 +21,31 @@ type Account struct {
 	LastLoginAt    *time.Time     `json:"lastLoginAt"`
 }
 
-func (Account) TableName() string {
-	return "accounts"
+func (User) TableName() string {
+	return "users"
 }
 
-// CreateAccountRequest 创建账号请求
-type CreateAccountRequest struct {
+// CreateUserRequest 创建用户请求
+type CreateUserRequest struct {
 	Phone string `json:"phone" binding:"required"`
 }
 
-// UpdateAccountRequest 更新账号请求
-type UpdateAccountRequest struct {
+// UpdateUserRequest 更新用户请求
+type UpdateUserRequest struct {
 	Status string `json:"status" binding:"omitempty,oneof=active disabled"`
 }
 
-// AccountResponse 单个账号响应
-type AccountResponse struct {
-	Code    int      `json:"code"`
-	Message string   `json:"message"`
-	Data    *Account `json:"data,omitempty"`
+// UserResponse 单个用户响应
+type UserResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    *User  `json:"data,omitempty"`
 }
 
-// AccountListResponse 账号列表响应
-type AccountListResponse struct {
-	Code    int       `json:"code"`
-	Message string    `json:"message"`
-	Data    []Account `json:"data"`
-	Total   int64     `json:"total"`
+// UserListResponse 用户列表响应
+type UserListResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    []User `json:"data"`
+	Total   int64  `json:"total"`
 }
