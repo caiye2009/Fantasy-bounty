@@ -41,7 +41,11 @@ func SetupRouter() (*gin.Engine, func()) {
 	if cryptoKey == "" {
 		log.Fatal("CRYPTO_KEY 环境变量未设置，必须是 16/24/32 字节的密钥")
 	}
-	cryptoService, err := crypto.NewCrypto(cryptoKey)
+	hashPepper := getEnv("HASH_PEPPER", "")
+	if hashPepper == "" {
+		log.Fatal("HASH_PEPPER 环境变量未设置")
+	}
+	cryptoService, err := crypto.NewCrypto(cryptoKey, hashPepper)
 	if err != nil {
 		log.Fatal("初始化加密服务失败: ", err)
 	}
@@ -80,12 +84,13 @@ func SetupRouter() (*gin.Engine, func()) {
 	)
 
 	// 初始化内部系统反向代理
-	internalProxy := proxy.NewInternalProxy(tokenManager, getEnv("INTERNAL_API_URL", ""))
+	internalProxy := proxy.NewInternalProxy(tokenManager, getEnv("INTERNAL_API_URL", ""), jwtService)
 
 	// API v1 路由组
 	v1 := router.Group("/api/v1")
 	{
-		// 认证路由 - 不需要JWT认证，但有审计
+		// ========== 供应商认证路由 ==========
+		// 不需要JWT认证，但有审计
 		authGroup := v1.Group("/auth")
 		authGroup.Use(middleware.Audit(auditService))
 		{
@@ -93,46 +98,64 @@ func SetupRouter() (*gin.Engine, func()) {
 			authGroup.POST("/verify-code", authHandler.VerifyCode) // 验证码登录/注册
 		}
 
-		// 受保护路由 - JWT + 审计
-		protected := v1.Group("")
-		protected.Use(middleware.JWTAuth(jwtService))
-		protected.Use(middleware.Audit(auditService))
-
-		// Bid 路由
-		bids := protected.Group("/bids")
+		// ========== 供应商业务路由 ==========
+		// 需要外部JWT认证 + 审计
+		supplierGroup := v1.Group("/supplier")
+		supplierGroup.Use(middleware.JWTAuth(jwtService))
+		supplierGroup.Use(middleware.Audit(auditService))
 		{
-			bids.POST("", bidHandler.CreateBid)      // 创建竞标（需要供应商认证）
-			bids.GET("", bidHandler.ListBids)        // 获取竞标列表
-			bids.GET("/my", bidHandler.ListMyBids)   // 获取我的竞标列表
-			bids.DELETE("/:id", bidHandler.DeleteBid) // 删除竞标
+			// Bid 路由
+			bids := supplierGroup.Group("/bids")
+			{
+				bids.POST("", bidHandler.CreateBid)       // 创建竞标（需要供应商认证）
+				bids.GET("", bidHandler.ListBids)         // 获取竞标列表
+				bids.GET("/my", bidHandler.ListMyBids)    // 获取我的竞标列表
+				bids.DELETE("/:id", bidHandler.DeleteBid) // 删除竞标
+			}
+
+			// Supplier 路由
+			suppliers := supplierGroup.Group("/suppliers")
+			{
+				suppliers.GET("", supplierHandler.ListSuppliers)
+				suppliers.GET("/:id", supplierHandler.GetSupplier)
+				suppliers.POST("/recognize", supplierHandler.RecognizeLicense) // 上传营业执照OCR识别
+				suppliers.POST("/apply", supplierHandler.ApplySupplier)        // 提交供应商认证申请
+				suppliers.GET("/my", supplierHandler.GetMySupplierStatus)      // 获取我的供应商认证状态
+			}
+
+			// User 路由
+			users := supplierGroup.Group("/users")
+			{
+				users.POST("", userHandler.CreateUser)
+				users.GET("", userHandler.ListUsers)
+				users.GET("/:id", userHandler.GetUser)
+				users.PUT("/:id", userHandler.UpdateUser)
+				users.DELETE("/:id", userHandler.DeleteUser)
+			}
 		}
 
-		// User 路由
-		users := protected.Group("/users")
-		{
-			users.POST("", userHandler.CreateUser)
-			users.GET("", userHandler.ListUsers)
-			users.GET("/:id", userHandler.GetUser)
-			users.PUT("/:id", userHandler.UpdateUser)
-			users.DELETE("/:id", userHandler.DeleteUser)
-		}
-
-		// Supplier 路由
-		suppliers := protected.Group("/suppliers")
-		{
-			suppliers.GET("", supplierHandler.ListSuppliers)
-			suppliers.GET("/:id", supplierHandler.GetSupplier)
-			suppliers.POST("/recognize", supplierHandler.RecognizeLicense) // 上传营业执照OCR识别
-			suppliers.POST("/apply", supplierHandler.ApplySupplier)        // 提交供应商认证申请
-			suppliers.GET("/my", supplierHandler.GetMySupplierStatus)      // 获取我的供应商认证状态
-		}
-
-		// 内部系统代理路由 - 外部 JWT 认证 + 审计 + 转发到内部系统
+		// ========== 内部系统路由 ==========
 		internalGroup := v1.Group("/internal")
-		internalGroup.Use(middleware.JWTAuth(jwtService))
 		internalGroup.Use(middleware.Audit(auditService))
 		{
-			internalGroup.Any("/*path", internalProxy.Handler())
+			// 内部用户登录（不需要JWT）
+			internalGroup.POST("/login", authHandler.InternalLogin)
+
+			// ========== 外部用户访问的路径（供应商） ==========
+			// 需要验证外部JWT，通过后转换成内部token访问老系统
+			// 使用专门的 BountiesHandler（通用 Handler 依赖 *path 参数，这里不适用）
+			internalGroup.GET("/bounties", middleware.JWTAuth(jwtService), internalProxy.BountiesHandler())
+			internalGroup.GET("/bounties/:id", middleware.JWTAuth(jwtService), internalProxy.BountiesHandler())
+
+			// TODO: 在这里添加其他外部用户可以访问的路径
+			// internalGroup.GET("/search", middleware.JWTAuth(jwtService), internalProxy.Handler())
+
+			// ========== 内部用户访问的路径（员工） ==========
+			// 直接透传Authorization header到老系统，不做JWT验证
+			// 注意：由于 Gin 不允许通配符和具体路径混用，
+			// 需要为内部用户明确添加需要的路由，或者在这里使用 NoRoute
+			// 暂时注释掉通配符路由，避免冲突
+			// internalGroup.Any("/*path", internalProxy.Handler())
 		}
 	}
 

@@ -5,10 +5,14 @@ import (
 	"back/pkg/crypto"
 	"back/pkg/jwt"
 	"back/pkg/middleware"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -234,4 +238,93 @@ func (h *Handler) VerifyCode(c *gin.Context) {
 		Username:  u.Username,
 		IsNewUser: isNewUser,
 	})
+}
+
+// InternalLogin 内部系统登录代理
+// @Summary 内部系统登录
+// @Description 将登录请求转发到内部系统，返回内部系统的token
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body InternalLoginRequest true "工号和密码"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} ErrorResponse
+// @Failure 502 {object} ErrorResponse
+// @Router /api/v1/internal/login [post]
+func (h *Handler) InternalLogin(c *gin.Context) {
+	var req InternalLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// 获取内部系统配置
+	internalAPIURL := os.Getenv("INTERNAL_API_URL")
+	internalAuthPath := os.Getenv("INTERNAL_AUTH_PATH")
+	if internalAPIURL == "" || internalAuthPath == "" {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "内部系统配置错误",
+		})
+		return
+	}
+
+	// 构造转发请求
+	loginURL := internalAPIURL + internalAuthPath
+	body, err := json.Marshal(req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "请求序列化失败",
+		})
+		return
+	}
+
+	// 发送请求到内部系统
+	httpReq, err := http.NewRequest(http.MethodPost, loginURL, bytes.NewReader(body))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "创建请求失败",
+		})
+		return
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, ErrorResponse{
+			Code:    http.StatusBadGateway,
+			Message: "内部系统连接失败: " + err.Error(),
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	// 读取响应
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "读取响应失败",
+		})
+		return
+	}
+
+	// 设置审计信息
+	if rc := middleware.GetRequestContext(c); rc != nil {
+		rc.Action = "auth.internal_login"
+		rc.Resource = "auth"
+		rc.Detail = map[string]any{
+			"username":    req.Username,
+			"status_code": resp.StatusCode,
+		}
+	}
+
+	// 透传内部系统的响应（包括状态码和body）
+	c.Data(resp.StatusCode, "application/json", respBody)
 }

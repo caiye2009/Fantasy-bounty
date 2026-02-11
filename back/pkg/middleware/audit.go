@@ -31,7 +31,11 @@ func Audit(auditService audit.Service) gin.HandlerFunc {
 			b, err := json.Marshal(rc.Detail)
 			if err == nil {
 				detailJSON = string(b)
+			} else {
+				detailJSON = "null"
 			}
+		} else {
+			detailJSON = "null"
 		}
 
 		entry := &audit.AuditLog{

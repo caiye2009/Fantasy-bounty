@@ -17,7 +17,7 @@ const getHeaders = () => ({
  */
 export const fetchBidList = async (bountyId, page = 1, pageSize = 10) => {
   const response = await fetch(
-    `${API_BASE}/bids?bounty_id=${bountyId}&page=${page}&page_size=${pageSize}`,
+    `${API_BASE}/supplier/bids?bounty_id=${bountyId}&page=${page}&page_size=${pageSize}`,
     { headers: getHeaders() }
   )
 

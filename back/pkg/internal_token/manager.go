@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -27,7 +29,7 @@ type Manager struct {
 }
 
 // refreshThreshold 距离过期小于此时间时触发刷新
-const refreshThreshold = 30 * time.Minute
+const refreshThreshold = 1 * time.Hour
 
 // NewManager 创建内部 Token 管理器
 func NewManager(apiURL, authPath, username, password string) *Manager {
@@ -83,13 +85,21 @@ func (m *Manager) GetToken() (string, error) {
 func (m *Manager) refreshToken() error {
 	loginURL := m.apiURL + m.authPath
 
-	body, err := json.Marshal(map[string]string{
-		"username": m.username,
-		"password": m.password,
+	log.Printf("[TOKEN-MGR] 开始刷新内部token")
+	log.Printf("[TOKEN-MGR]   登录URL: %s", loginURL)
+	log.Printf("[TOKEN-MGR]   账号: %s", m.username)
+
+	// 适配内部系统的请求格式: {"user":{"Account":"xxx","PassWord":"xxx"}}
+	body, err := json.Marshal(map[string]interface{}{
+		"user": map[string]string{
+			"Account":  m.username,
+			"PassWord": m.password,
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("序列化登录请求失败: %w", err)
 	}
+	log.Printf("[TOKEN-MGR]   请求体: %s", string(body))
 
 	req, err := http.NewRequest(http.MethodPost, loginURL, bytes.NewReader(body))
 	if err != nil {
@@ -99,35 +109,62 @@ func (m *Manager) refreshToken() error {
 
 	resp, err := m.httpClient.Do(req)
 	if err != nil {
+		log.Printf("[TOKEN-MGR] 请求内部登录接口失败: %v", err)
 		return fmt.Errorf("调用内部登录接口失败: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// 先读取整个 body 用于 debug
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("读取登录响应失败: %w", err)
+	}
+
+	log.Printf("[TOKEN-MGR]   登录响应 HTTP状态码: %d", resp.StatusCode)
+	if len(respBody) > 300 {
+		log.Printf("[TOKEN-MGR]   登录响应体(前300字符): %s...", string(respBody[:300]))
+	} else {
+		log.Printf("[TOKEN-MGR]   登录响应体: %s", string(respBody))
+	}
+
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("内部登录接口返回非 200 状态码: %d", resp.StatusCode)
+		return fmt.Errorf("内部登录接口返回非 200 状态码: %d, body: %s", resp.StatusCode, string(respBody))
 	}
 
+	// 适配内部系统的响应格式
 	var result struct {
-		Token string `json:"token"`
+		IsSucceed  bool   `json:"isSucceed"`
+		Message    string `json:"message"`
+		StatusCode int    `json:"statusCode"`
+		Data       struct {
+			Token string `json:"Token"`
+		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return fmt.Errorf("解析登录响应失败: %w", err)
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return fmt.Errorf("解析登录响应失败: %w, body: %s", err, string(respBody))
 	}
 
-	if result.Token == "" {
+	log.Printf("[TOKEN-MGR]   isSucceed: %v, message: %s", result.IsSucceed, result.Message)
+
+	if !result.IsSucceed {
+		return fmt.Errorf("登录失败: %s", result.Message)
+	}
+
+	if result.Data.Token == "" {
 		return fmt.Errorf("登录响应中未包含 token")
 	}
 
 	// 解析 JWT 获取过期时间
-	expiresAt, err := parseJWTExpiry(result.Token)
+	expiresAt, err := parseJWTExpiry(result.Data.Token)
 	if err != nil {
-		// 无法解析过期时间，使用默认 10h
+		log.Printf("[TOKEN-MGR]   无法解析JWT过期时间: %v, 使用默认10h", err)
 		expiresAt = time.Now().Add(10 * time.Hour)
 	}
 
-	m.token = result.Token
+	m.token = result.Data.Token
 	m.expiresAt = expiresAt
 
+	log.Printf("[TOKEN-MGR] 内部token刷新成功, 过期时间: %v", expiresAt.Format(time.RFC3339))
 	return nil
 }
 

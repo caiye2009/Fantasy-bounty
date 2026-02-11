@@ -26,6 +26,12 @@ type VerifyCodeResponse struct {
 	IsNewUser bool   `json:"isNewUser"` // 是否新用户（首次注册）
 }
 
+// InternalLoginRequest 内部系统登录请求
+type InternalLoginRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
 // ErrorResponse 错误响应
 type ErrorResponse struct {
 	Code    int    `json:"code"`

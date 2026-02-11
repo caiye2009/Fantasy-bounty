@@ -43,6 +43,14 @@ services:
       - JWT_SECRET=your-secret-key-change-this-in-production-2024
       - JWT_ISSUER=bounty-backend
       - JWT_EXPIRY_HOURS=24
+      # 密码加密配置
+      - CRYPTO_KEY=OItYSrY06Ul0gqchZby4L2GWdfcEpngi
+      - HASH_PEPPER=jRWGUvMPUGH+UpXWJjtk5kxuVRuPekCsz9dKPp+BKV/ebNcj
+      # 内部系统配置
+      - INTERNAL_API_URL=http://106.15.182.143
+      - INTERNAL_AUTH_PATH=/api/User/Login
+      - INTERNAL_USERNAME=WBDY
+      - INTERNAL_PASSWORD=Ftswbdy.
       # Gin模式
       - GIN_MODE=release
       # Elasticsearch配置

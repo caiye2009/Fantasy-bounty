@@ -1,32 +1,14 @@
 <script setup>
-import { ref, onMounted, onUnmounted, inject, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, inject, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, ArrowUpNarrowWide, ArrowDownNarrowWide, Phone, Mail, Loader2, Inbox, X, Calendar, Truck, Tag } from 'lucide-vue-next'
+import { Search, Phone, Mail, Loader2, Inbox, X, Calendar, Truck, Tag } from 'lucide-vue-next'
 import BountyCard from '@/components/BountyCard.vue'
 import { placeBid } from '@/api/bid'
-import { peekBountyList } from '@/api/bounty'
-import { useSearch } from '@/composables/useSearch'
+import { fetchBountyList, peekBountyList } from '@/api/bounty'
 
 // 从父组件注入登录状态和登录modal控制
 const isLoggedIn = inject('isLoggedIn')
 const openLoginModal = inject('openLoginModal')
-
-// 使用 ES 搜索
-const {
-  searchState,
-  results: esResults,
-  total: esTotal,
-  totalPages,
-  loading: esLoading,
-  availableFilters,
-  doSearch,
-  setQuery,
-  setFilter,
-  clearFilters,
-  setSort,
-  toggleSortOrder: toggleEsSortOrder,
-  setPage
-} = useSearch()
 
 // 需要登录才能执行的操作
 const requireLogin = (callback) => {
@@ -38,71 +20,76 @@ const requireLogin = (callback) => {
   return true
 }
 
-// 排序选项（静态）
-const sortOptions = [
-  { label: '发布时间', value: 'created_at' },
-  { label: '截止时间', value: 'bid_deadline' },
-  { label: '克重', value: 'fabric_weight' }
-]
+// 悬赏类型中英文对照
+const bountyTypeMap = {
+  woven: '梭织',
+  knitted: '针织'
+}
 
-// 从 ES 聚合结果获取动态筛选选项
-const getFilterOptions = (field) => {
-  const filter = availableFilters.value.find(f => f.field === field)
-  if (!filter || !filter.buckets) {
-    return [{ label: '全部', value: '' }]
+// ========== 筛选状态 ==========
+const searchKeyword = ref('')
+const filterBeginDate = ref('')
+const filterEndDate = ref('')
+const filterIncludeEnd = ref('0')
+
+// ========== 登录后的悬赏列表（老系统接口） ==========
+const tasks = ref([])
+const loading = ref(false)
+const total = ref(0)
+
+// 加载悬赏列表（登录后调用老系统接口）
+const loadBountyList = async () => {
+  loading.value = true
+  try {
+    const result = await fetchBountyList({
+      keyword: searchKeyword.value,
+      beginDate: filterBeginDate.value,
+      endDate: filterEndDate.value,
+      includeEnd: filterIncludeEnd.value,
+    })
+    tasks.value = result.data.map(item => transformBountyItem(item))
+    total.value = result.total
+  } catch (error) {
+    console.error('加载悬赏列表失败:', error)
+    ElMessage.error('加载悬赏列表失败，请重试')
+  } finally {
+    loading.value = false
   }
-  return [
-    { label: '全部', value: '' },
-    ...filter.buckets.map(b => ({
-      label: `${b.label} (${b.docCount})`,
-      value: b.key
-    }))
-  ]
 }
 
-// 计算属性：动态筛选选项
-const bountyTypeOptions = computed(() => getFilterOptions('bounty_type'))
-const createdAtOptions = computed(() => getFilterOptions('created_at_ranges'))
-const bidDeadlineOptions = computed(() => getFilterOptions('bid_deadline_ranges'))
-const quantityMetersOptions = computed(() => getFilterOptions('quantity_meters_ranges'))
-const quantityKgOptions = computed(() => getFilterOptions('quantity_kg_ranges'))
-
-// 切换排序方向
-const toggleSortOrder = () => {
+// 搜索防抖
+let searchTimeout = null
+const handleSearchInput = () => {
   if (!requireLogin()) return
-  toggleEsSortOrder()
-  doSearch()
+  if (searchTimeout) clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    loadBountyList()
+  }, 400)
 }
 
-// 处理排序字段变化（下拉框）
-const handleSortFieldChange = (value) => {
+// 回车立即搜索
+const handleSearchEnter = () => {
   if (!requireLogin()) return
-  setSort(value)
-  doSearch()
+  if (searchTimeout) clearTimeout(searchTimeout)
+  loadBountyList()
 }
 
-// 处理筛选器变化
-const handleFilterChange = (field, value) => {
+// 筛选变化
+const handleFilterChange = () => {
   if (!requireLogin()) return
-  setFilter(field, value || null)
-  doSearch()
+  loadBountyList()
 }
 
-// 清除所有筛选
+// 清除筛选
 const handleClearFilters = () => {
-  if (!requireLogin()) return
-  clearFilters()
-  doSearch()
+  searchKeyword.value = ''
+  filterBeginDate.value = ''
+  filterEndDate.value = ''
+  filterIncludeEnd.value = '0'
+  if (isLoggedIn.value) loadBountyList()
 }
 
-// 下拉框展开前检查登录
-const onSelectVisibleChange = (visible) => {
-  if (visible && !isLoggedIn.value) {
-    openLoginModal()
-  }
-}
-
-// 点击搜索框时检查登录
+// 点击筛选控件时检查登录
 const onFilterClick = (event) => {
   if (!isLoggedIn.value) {
     event.preventDefault()
@@ -111,23 +98,9 @@ const onFilterClick = (event) => {
   }
 }
 
-// 任务列表（未登录时用 peek API）
+// ========== 未登录的预览列表 ==========
 const peekTasks = ref([])
 const peekLoading = ref(false)
-
-// 悬赏类型中英文对照
-const bountyTypeMap = {
-  woven: '梭织',
-  knitted: '针织'
-}
-
-// 状态中英文对照
-// const statusMap = {
-//   open: '招标中',
-//   in_progress: '进行中',
-//   completed: '已完成',
-//   closed: '已关闭'
-// }
 
 // 加载预览列表（未登录时使用）
 const loadPeekBounties = async () => {
@@ -142,9 +115,36 @@ const loadPeekBounties = async () => {
   }
 }
 
-// 转换悬赏数据格式（统一处理 ES 返回和 API 返回的数据）
+// 计算当前显示的任务列表
+const displayTasks = ref([])
+
+// 监听登录状态变化
+watch(isLoggedIn, (loggedIn) => {
+  if (loggedIn) {
+    // 登录后加载完整列表
+    handleClearFilters()
+  } else {
+    // 登出后显示 peek 预览列表
+    loadPeekBounties()
+  }
+}, { immediate: false })
+
+// 监听登录列表变化
+watch(tasks, (newTasks) => {
+  if (isLoggedIn.value) {
+    displayTasks.value = newTasks
+  }
+}, { deep: true })
+
+// 监听预览数据变化
+watch(peekTasks, (newTasks) => {
+  if (!isLoggedIn.value) {
+    displayTasks.value = newTasks
+  }
+}, { deep: true })
+
+// 转换悬赏数据格式（统一处理 API 返回的数据）
 const transformBountyItem = (item) => {
-  // ES 返回的字段是 snake_case，API 返回的是 camelCase
   const id = item.id
   const productName = item.product_name || item.productName
   const productCode = item.product_code || item.productCode
@@ -155,7 +155,7 @@ const transformBountyItem = (item) => {
   const sampleType = item.sample_type || item.sampleType
   const expectedDeliveryDate = item.expected_delivery_date || item.expectedDeliveryDate
 
-  // 重建 spec 对象（ES 返回的是扁平化的字段）
+  // 重建 spec 对象
   let wovenSpec = item.wovenSpec
   let knittedSpec = item.knittedSpec
 
@@ -205,7 +205,6 @@ const generateTagsFromData = (data) => {
   const tags = []
   if (data.bountyType) tags.push(bountyTypeMap[data.bountyType] || data.bountyType)
   if (data.sampleType) tags.push(data.sampleType)
-  // if (data.status) tags.push(statusMap[data.status] || data.status)
   return tags
 }
 
@@ -215,7 +214,6 @@ const generateDescriptionFromData = (data) => {
   if (data.bountyType === 'woven' && data.wovenSpec) {
     const spec = data.wovenSpec
     if (spec.composition) {
-      // 处理对象或字符串格式的成分
       const compStr = typeof spec.composition === 'object'
         ? Object.entries(spec.composition).map(([n, p]) => `${n} ${(p * 100).toFixed(0)}%`).join(' / ')
         : spec.composition
@@ -238,34 +236,6 @@ const generateDescriptionFromData = (data) => {
   }
   return parts.length > 0 ? parts.join(' | ') : '暂无详细规格'
 }
-
-// 计算当前显示的任务列表
-const displayTasks = ref([])
-
-// 监听登录状态变化
-watch(isLoggedIn, (loggedIn) => {
-  if (loggedIn) {
-    // 登录后执行 ES 搜索
-    doSearch()
-  } else {
-    // 登出后显示 peek 预览列表
-    loadPeekBounties()
-  }
-}, { immediate: false })
-
-// 监听 ES 搜索结果变化，转换数据格式
-watch(esResults, (results) => {
-  if (isLoggedIn.value && results) {
-    displayTasks.value = results.map(item => transformBountyItem(item))
-  }
-}, { deep: true })
-
-// 监听预览数据变化
-watch(peekTasks, (tasks) => {
-  if (!isLoggedIn.value) {
-    displayTasks.value = tasks
-  }
-}, { deep: true })
 
 // 格式化日期时间
 const formatDateTime = (dateStr) => {
@@ -292,8 +262,6 @@ const formatDate = (dateStr) => {
 }
 
 // 格式化面料成分
-// 处理对象格式 {"棉": 0.6, "涤纶": 0.4} -> "棉 60% / 涤纶 40%"
-// 如果已经是字符串则直接返回
 const formatComposition = (composition) => {
   if (!composition) return ''
   if (typeof composition === 'string') return composition
@@ -321,9 +289,8 @@ const handleKeydown = (e) => {
 
 onMounted(() => {
   if (isLoggedIn.value) {
-    doSearch()
+    loadBountyList()
   } else {
-    // 未登录时显示 peek 预览列表
     loadPeekBounties()
   }
   document.addEventListener('keydown', handleKeydown)
@@ -332,27 +299,6 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
 })
-
-// 搜索输入防抖
-let searchTimeout = null
-const handleSearchInput = (event) => {
-  if (!requireLogin()) return
-  const value = event.target.value
-  setQuery(value)
-
-  // 防抖搜索
-  if (searchTimeout) clearTimeout(searchTimeout)
-  searchTimeout = setTimeout(() => {
-    doSearch()
-  }, 300)
-}
-
-// 按回车立即搜索
-const handleSearch = () => {
-  if (!requireLogin()) return
-  if (searchTimeout) clearTimeout(searchTimeout)
-  doSearch()
-}
 
 // 抽屉状态
 const drawerVisible = ref(false)
@@ -474,127 +420,81 @@ const submitBid = async () => {
 const handleBid = () => {
   openBidModal()
 }
+
+// 是否有筛选条件
+const hasFilters = () => {
+  return searchKeyword.value || filterBeginDate.value || filterEndDate.value || filterIncludeEnd.value === '1'
+}
 </script>
 
 <template>
   <div class="w-[80%] mx-auto py-6">
     <!-- 左右布局容器 -->
     <div class="flex gap-6">
-      <!-- 左侧：搜索和筛选区域 -->
+      <!-- 左侧：搜索筛选 + 页脚 -->
       <aside class="w-[30%] shrink-0 sticky top-24 h-[calc(100vh-7rem)] flex flex-col justify-between overflow-y-auto">
-        <!-- 搜索和排序 -->
+        <!-- 搜索和筛选 -->
         <div class="bg-white rounded-lg p-6 shadow-sm mb-4">
           <!-- 搜索框 -->
           <div class="relative mb-4">
             <input
-              :value="searchState.query"
+              v-model="searchKeyword"
               type="text"
-              placeholder="搜索悬赏任务..."
+              placeholder="搜索产品名称..."
               class="w-full px-4 py-2.5 pl-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
               @mousedown="onFilterClick"
               @input="handleSearchInput"
-              @keyup.enter="handleSearch"
+              @keyup.enter="handleSearchEnter"
             >
             <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" :size="14" />
           </div>
 
           <!-- 筛选器 -->
-          <div class="mt-4 space-y-3">
-            <!-- 悬赏类型 -->
+          <div class="space-y-3">
+            <!-- 发布开始日期 -->
             <div class="flex items-center gap-2">
-              <span class="text-sm text-gray-600 whitespace-nowrap w-16">类型</span>
-              <el-select
-                :model-value="searchState.filters.bounty_type || ''"
-                @change="handleFilterChange('bounty_type', $event)"
-                @visible-change="onSelectVisibleChange"
-                placeholder="全部"
-                class="flex-1"
-              >
-                <el-option v-for="opt in bountyTypeOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-              </el-select>
+              <span class="text-sm text-gray-600 whitespace-nowrap w-16">开始日期</span>
+              <el-date-picker
+                v-model="filterBeginDate"
+                type="date"
+                placeholder="不限"
+                value-format="YYYY-MM-DD"
+                class="!flex-1"
+                @change="handleFilterChange"
+              />
             </div>
 
-            <!-- 发布时间 -->
-            <div v-if="createdAtOptions.length > 1" class="flex items-center gap-2">
-              <span class="text-sm text-gray-600 whitespace-nowrap w-16">发布</span>
-              <el-select
-                :model-value="searchState.filters.created_at || ''"
-                @change="handleFilterChange('created_at', $event)"
-                @visible-change="onSelectVisibleChange"
-                placeholder="全部"
-                class="flex-1"
-              >
-                <el-option v-for="opt in createdAtOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-              </el-select>
+            <!-- 发布结束日期 -->
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-600 whitespace-nowrap w-16">结束日期</span>
+              <el-date-picker
+                v-model="filterEndDate"
+                type="date"
+                placeholder="不限"
+                value-format="YYYY-MM-DD"
+                class="!flex-1"
+                @change="handleFilterChange"
+              />
             </div>
 
-            <!-- 截止接单 -->
-            <div v-if="bidDeadlineOptions.length > 1" class="flex items-center gap-2">
-              <span class="text-sm text-gray-600 whitespace-nowrap w-16">截止</span>
+            <!-- 是否包含已截止 -->
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-600 whitespace-nowrap w-16">已截止</span>
               <el-select
-                :model-value="searchState.filters.bid_deadline || ''"
-                @change="handleFilterChange('bid_deadline', $event)"
-                @visible-change="onSelectVisibleChange"
-                placeholder="全部"
+                v-model="filterIncludeEnd"
                 class="flex-1"
+                @change="handleFilterChange"
               >
-                <el-option v-for="opt in bidDeadlineOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-              </el-select>
-            </div>
-
-            <!-- 需求量(米) - 梭织 -->
-            <div v-if="quantityMetersOptions.length > 1" class="flex items-center gap-2">
-              <span class="text-sm text-gray-600 whitespace-nowrap w-16">需求(米)</span>
-              <el-select
-                :model-value="searchState.filters.quantity_meters || ''"
-                @change="handleFilterChange('quantity_meters', $event)"
-                @visible-change="onSelectVisibleChange"
-                placeholder="全部"
-                class="flex-1"
-              >
-                <el-option v-for="opt in quantityMetersOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-              </el-select>
-            </div>
-
-            <!-- 需求量(kg) - 针织 -->
-            <div v-if="quantityKgOptions.length > 1" class="flex items-center gap-2">
-              <span class="text-sm text-gray-600 whitespace-nowrap w-16">需求(kg)</span>
-              <el-select
-                :model-value="searchState.filters.quantity_kg || ''"
-                @change="handleFilterChange('quantity_kg', $event)"
-                @visible-change="onSelectVisibleChange"
-                placeholder="全部"
-                class="flex-1"
-              >
-                <el-option v-for="opt in quantityKgOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+                <el-option label="不包含" value="0" />
+                <el-option label="包含" value="1" />
               </el-select>
             </div>
           </div>
 
-           <!-- 排序方式 -->
-          <div class="flex items-center gap-2">
-            <span class="text-sm text-gray-600 whitespace-nowrap">排序</span>
-            <el-select
-              :model-value="searchState.sort.field"
-              @change="handleSortFieldChange"
-              @visible-change="onSelectVisibleChange"
-              class="flex-1"
-            >
-              <el-option v-for="opt in sortOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-            </el-select>
-            <el-button
-              @click="toggleSortOrder"
-              :title="searchState.sort.order === 'asc' ? '升序' : '降序'"
-            >
-              <ArrowUpNarrowWide v-if="searchState.sort.order === 'asc'" :size="14" />
-              <ArrowDownNarrowWide v-else :size="14" />
-            </el-button>
-          </div>
-
-          <!-- 搜索统计 -->
+          <!-- 搜索统计 + 清除 -->
           <div v-if="isLoggedIn" class="mt-4 text-xs text-gray-400">
-            共 {{ esTotal }} 条结果
-            <span v-if="Object.keys(searchState.filters).length > 0" class="ml-2">
+            共 {{ total }} 条结果
+            <span v-if="hasFilters()" class="ml-2">
               · <el-button type="primary" link size="small" @click="handleClearFilters">清除筛选</el-button>
             </span>
           </div>
@@ -637,7 +537,7 @@ const handleBid = () => {
       <!-- 右侧：任务列表 -->
       <div class="flex-1 min-w-0 flex flex-col gap-5">
         <!-- 加载状态 -->
-        <div v-if="esLoading || peekLoading" class="bg-white rounded-lg p-16 shadow-sm text-center">
+        <div v-if="loading || peekLoading" class="bg-white rounded-lg p-16 shadow-sm text-center">
           <Loader2 class="text-gray-300 mb-4 animate-spin mx-auto" :size="40" />
           <p class="text-gray-500">加载中...</p>
         </div>
@@ -647,7 +547,7 @@ const handleBid = () => {
           <Inbox class="text-gray-300 mb-6 mx-auto" :size="60" />
           <h3 class="text-lg font-medium text-gray-600 mb-2">暂无悬赏任务</h3>
           <p class="text-sm text-gray-400">
-            {{ isLoggedIn && searchState.query ? '未找到匹配的结果，请尝试其他关键词' : '请稍后再来查看' }}
+            {{ isLoggedIn && searchKeyword ? '未找到匹配的结果，请尝试其他关键词' : '请稍后再来查看' }}
           </p>
         </div>
 
@@ -664,15 +564,7 @@ const handleBid = () => {
           @click="openDrawer(task)"
         />
 
-        <!-- 分页（登录后显示） -->
-        <div v-if="isLoggedIn && totalPages > 1" class="flex justify-center py-4">
-          <el-pagination
-            :current-page="searchState.page"
-            :page-count="totalPages"
-            layout="prev, pager, next"
-            @current-change="(page) => { setPage(page); doSearch() }"
-          />
-        </div>
+        <!-- 内部系统接口暂无分页，后续可添加 -->
       </div>
     </div>
 

@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -13,12 +14,14 @@ import (
 
 // Crypto AES-GCM 加密服务
 type Crypto struct {
-	key []byte
+	key    []byte
+	pepper []byte
 }
 
 // NewCrypto 创建加密服务实例
 // key 必须是 16, 24, 或 32 字节（对应 AES-128, AES-192, AES-256）
-func NewCrypto(key string) (*Crypto, error) {
+// pepper 用于 HMAC-SHA256 哈希，不能为空
+func NewCrypto(key string, pepper string) (*Crypto, error) {
 	keyBytes := []byte(key)
 	keyLen := len(keyBytes)
 
@@ -26,7 +29,11 @@ func NewCrypto(key string) (*Crypto, error) {
 		return nil, errors.New("加密密钥长度必须是 16, 24 或 32 字节")
 	}
 
-	return &Crypto{key: keyBytes}, nil
+	if pepper == "" {
+		return nil, errors.New("HASH_PEPPER 不能为空")
+	}
+
+	return &Crypto{key: keyBytes, pepper: []byte(pepper)}, nil
 }
 
 // Encrypt 加密字符串，返回 base64 编码的密文
@@ -92,8 +99,9 @@ func MaskPhone(phone string) string {
 	return phone[:3] + "****" + phone[len(phone)-4:]
 }
 
-// Hash 计算字符串的 SHA256 哈希（用于索引查询）
-func Hash(data string) string {
-	hash := sha256.Sum256([]byte(data))
-	return hex.EncodeToString(hash[:])
+// Hash 使用 HMAC-SHA256 + pepper 计算哈希（用于索引查询）
+func (c *Crypto) Hash(data string) string {
+	mac := hmac.New(sha256.New, c.pepper)
+	mac.Write([]byte(data))
+	return hex.EncodeToString(mac.Sum(nil))
 }

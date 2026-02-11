@@ -5,18 +5,31 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"strings"
 
 	"gorm.io/gorm"
 )
 
-// generateUsername 生成用户名：用户+5位随机字符（小写字母+数字）
+// generateUsername 生成用户名：8位base62随机字符（0-9a-zA-Z）
 func generateUsername() string {
-	const charset = "abcdefghijklmnopqrstuvwxyz0123456789"
-	b := make([]byte, 5)
+	const base62 = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	b := make([]byte, 8)
 	for i := range b {
-		b[i] = charset[rand.Intn(len(charset))]
+		b[i] = base62[rand.Intn(len(base62))]
 	}
-	return "用户" + string(b)
+	return string(b)
+}
+
+// isUniqueConstraintError 检查是否是唯一约束冲突错误
+func isUniqueConstraintError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// PostgreSQL 唯一约束错误包含 "duplicate key" 或 "unique constraint"
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "duplicate key") ||
+		strings.Contains(errMsg, "unique constraint") ||
+		strings.Contains(errMsg, "UNIQUE constraint")
 }
 
 type Service interface {
@@ -62,22 +75,25 @@ func (s *service) CreateUser(ctx context.Context, req *CreateUserRequest) (*User
 
 	user := &User{
 		Username:       generateUsername(),
-		PhoneHash:      crypto.Hash(req.Phone),
+		PhoneHash:      s.crypto.Hash(req.Phone),
 		PhoneEncrypted: phoneEncrypted,
 		Status:         "active",
 	}
 
-	// 尝试创建，用户名冲突时重试（最多10次）
-	var createErr error
-	for i := 0; i < 10; i++ {
-		createErr = s.repo.Create(ctx, user)
-		if createErr == nil {
-			break
-		}
-		user.Username = generateUsername()
-	}
+	// 尝试创建，仅在用户名唯一冲突时重试1次
+	// 8位base62有62^8≈218万亿种组合，冲突率极低（百万用户下<0.046%）
+	createErr := s.repo.Create(ctx, user)
 	if createErr != nil {
-		return nil, errors.New("创建用户失败，用户名生成冲突")
+		// 只有唯一约束冲突才重试，其他错误直接返回
+		if isUniqueConstraintError(createErr) {
+			// 用户名冲突，重新生成再试一次
+			user.Username = generateUsername()
+			createErr = s.repo.Create(ctx, user)
+		}
+
+		if createErr != nil {
+			return nil, createErr
+		}
 	}
 
 	// 填充解密后的手机号用于返回
@@ -123,7 +139,7 @@ func (s *service) GetUserByUsername(ctx context.Context, username string) (*User
 
 func (s *service) GetUserByPhone(ctx context.Context, phone string) (*User, error) {
 	// 通过手机号哈希查询
-	phoneHash := crypto.Hash(phone)
+	phoneHash := s.crypto.Hash(phone)
 	user, err := s.repo.GetByPhoneHash(ctx, phoneHash)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

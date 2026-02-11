@@ -10,13 +10,23 @@ const getHeaders = () => ({
 
 /**
  * 获取悬赏列表（需要登录）
- * @param {number} page - 页码
- * @param {number} pageSize - 每页数量
+ * @param {Object} params - 查询参数
+ * @param {string} params.keyword - 产品名称搜索（模糊）
+ * @param {string} params.beginDate - 发布开始时间
+ * @param {string} params.endDate - 发布结束时间
+ * @param {string} params.includeEnd - 是否包含已截止 '1'包含 '0'不包含
  * @returns {Promise<{data: Array, total: number}>}
  */
-export const fetchBountyList = async (page = 1, pageSize = 10) => {
+export const fetchBountyList = async (params = {}) => {
+  const query = new URLSearchParams()
+  if (params.keyword) query.set('keyword', params.keyword)
+  if (params.beginDate) query.set('begin_date', params.beginDate)
+  if (params.endDate) query.set('end_date', params.endDate)
+  if (params.includeEnd) query.set('include_end', params.includeEnd)
+
+  const qs = query.toString()
   const response = await fetch(
-    `${API_BASE}/bounties?page=${page}&page_size=${pageSize}`,
+    `${API_BASE}/internal/bounties${qs ? '?' + qs : ''}`,
     { headers: getHeaders() }
   )
 
@@ -25,6 +35,17 @@ export const fetchBountyList = async (page = 1, pageSize = 10) => {
   }
 
   const result = await response.json()
+
+  // 适配内部系统响应格式
+  if (result.isSucceed && result.data) {
+    // 内部系统返回的数据格式
+    return {
+      data: Array.isArray(result.data) ? result.data : (result.data.list || []),
+      total: result.data.total || (Array.isArray(result.data) ? result.data.length : 0)
+    }
+  }
+
+  // 原有格式兼容
   return {
     data: result.data || [],
     total: result.total || 0
@@ -59,7 +80,7 @@ export const peekBountyList = async () => {
  */
 export const fetchBountyDetail = async (id) => {
   const response = await fetch(
-    `${API_BASE}/bounties/${id}`,
+    `${API_BASE}/internal/bounties/${id}`,
     { headers: getHeaders() }
   )
 
@@ -68,5 +89,11 @@ export const fetchBountyDetail = async (id) => {
   }
 
   const result = await response.json()
+
+  // 适配内部系统响应格式
+  if (result.isSucceed && result.data) {
+    return result.data
+  }
+
   return result.data
 }
