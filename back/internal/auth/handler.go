@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -237,6 +238,86 @@ func (h *Handler) VerifyCode(c *gin.Context) {
 		Token:     token,
 		Username:  u.Username,
 		IsNewUser: isNewUser,
+	})
+}
+
+// RefreshToken 刷新用户 JWT
+// 接受过期不超过 7 天的旧 token，签发新 token
+func (h *Handler) RefreshToken(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: "missing authorization header",
+		})
+		return
+	}
+
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: "invalid authorization header format",
+		})
+		return
+	}
+
+	tokenString := parts[1]
+
+	// 先尝试正常验证（token 还没过期，直接返回）
+	if claims, err := h.jwtService.ValidateToken(tokenString); err == nil {
+		c.JSON(http.StatusOK, RefreshTokenResponse{
+			Code:    http.StatusOK,
+			Message: "token 仍然有效",
+			Token:   tokenString,
+		})
+		_ = claims
+		return
+	}
+
+	// token 过期了，解析忽略过期检查
+	claims, err := h.jwtService.ParseTokenIgnoreExpiry(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: "token 无效，请重新登录",
+		})
+		return
+	}
+
+	// 检查过期时间，超过 7 天不允许刷新
+	if claims.ExpiresAt != nil {
+		expiredDuration := time.Since(claims.ExpiresAt.Time)
+		if expiredDuration > 7*24*time.Hour {
+			c.JSON(http.StatusUnauthorized, ErrorResponse{
+				Code:    http.StatusUnauthorized,
+				Message: "token 已过期超过7天，请重新登录",
+			})
+			return
+		}
+	}
+
+	// 签发新 token
+	newToken, err := h.jwtService.GenerateToken(claims.Username)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "生成新Token失败",
+		})
+		return
+	}
+
+	// 设置审计信息
+	if rc := middleware.GetRequestContext(c); rc != nil {
+		rc.Action = "auth.refresh_token"
+		rc.Resource = "auth"
+		rc.Username = claims.Username
+	}
+
+	c.JSON(http.StatusOK, RefreshTokenResponse{
+		Code:    http.StatusOK,
+		Message: "token 刷新成功",
+		Token:   newToken,
 	})
 }
 

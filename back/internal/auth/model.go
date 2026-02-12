@@ -32,6 +32,13 @@ type InternalLoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// RefreshTokenResponse token 刷新响应
+type RefreshTokenResponse struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Token   string `json:"token,omitempty"`
+}
+
 // ErrorResponse 错误响应
 type ErrorResponse struct {
 	Code    int    `json:"code"`

@@ -1,126 +1,54 @@
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { onMounted, onUnmounted, ref, inject, watch } from 'vue'
 import { Loader2, Tag, Clock, CalendarX, Handshake, Search, X, Barcode, Calendar } from 'lucide-vue-next'
-import { fetchMyBids } from '@/api/bid'
+import { useMyBids } from '@/composables/useMyBids'
+import { bountyTypeMap, formatDate, formatMoney, getStatusText } from '@/utils/format'
 
-// 筛选条件
-const statusOptions = [
-  { label: '全部', value: '' },
-  { label: '审核中', value: 'pending' },
-  { label: '进行中', value: 'in_progress' },
-  { label: '待验收', value: 'pending_acceptance' },
-  { label: '已完成', value: 'completed' }
-]
-const selectedStatus = ref('')
+const currentPage = inject('currentPage')
 
-// 接单记录（我投标的任务）
-const myBids = ref([])
-const loading = ref(false)
+// ========== 数据层：composable ==========
+const {
+  selectedStatus,
+  myBids,
+  loading,
+  error,
+  loadMyBids,
+  statusOptions,
+} = useMyBids()
 
-// 悬赏类型映射
-const bountyTypeMap = {
-  woven: '梭织',
-  knitted: '针织'
-}
-
-// 加载我的投标列表
-const loadMyBids = async () => {
-  loading.value = true
-  myBids.value = [] // 清空旧数据，避免切换状态时闪烁
-  try {
-    const result = await fetchMyBids(selectedStatus.value, 1, 50)
-    myBids.value = result.data.map(item => ({
-      id: item.id,
-      bountyId: item.bountyId,
-      bountyTitle: item.bountyProductName || '未知悬赏',
-      bountyProductCode: item.bountyProductCode || '',
-      bountyType: item.bountyType,
-      bidTime: formatDateTime(item.createdAt),
-      status: item.status,
-      bidAmount: item.bidPrice,
-      deadline: formatDate(item.bidDeadline),
-      wovenSpec: item.wovenSpec,
-      knittedSpec: item.knittedSpec
-    }))
-  } catch (error) {
-    console.error('加载投标列表失败:', error)
-  } finally {
-    loading.value = false
+// 切到本页时刷新数据
+watch(currentPage, (page) => {
+  if (page === 'myBids') {
+    loadMyBids()
   }
-}
-
-// 格式化日期时间
-const formatDateTime = (dateStr) => {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).replace(/\//g, '-')
-}
-
-// 格式化日期
-const formatDate = (dateStr) => {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).replace(/\//g, '-')
-}
-
-// 监听筛选条件变化
-watch(selectedStatus, () => {
-  loadMyBids()
 })
 
-onMounted(() => {
-  loadMyBids()
-  document.addEventListener('keydown', handleKeydown)
-})
-
-const formatMoney = (amount) => {
-  return new Intl.NumberFormat('zh-CN').format(amount)
-}
-
-const getStatusText = (status) => {
-  const statusMap = {
-    'pending': '审核中',
-    'in_progress': '进行中',
-    'pending_acceptance': '待验收',
-    'completed': '已完成'
-  }
-  return statusMap[status] || status
-}
-
-// 抽屉状态
+// ========== 抽屉 ==========
 const drawerVisible = ref(false)
 const selectedBid = ref(null)
 
 const openDrawer = (bid) => {
   selectedBid.value = bid
   drawerVisible.value = true
-  // 禁用页面滚动
   document.body.style.overflow = 'hidden'
 }
 
 const closeDrawer = () => {
   drawerVisible.value = false
   selectedBid.value = null
-  // 恢复页面滚动
   document.body.style.overflow = ''
 }
 
-// ESC 键关闭抽屉
+// ========== 键盘事件 ==========
 const handleKeydown = (e) => {
   if (e.key === 'Escape' && drawerVisible.value) {
     closeDrawer()
   }
 }
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeydown)
+})
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
@@ -228,7 +156,14 @@ onUnmounted(() => {
           </div>
         </template>
 
-        <!-- 无数据时显示空状态 -->
+        <!-- 错误状态 -->
+        <div v-else-if="error" class="bg-white rounded-lg p-16 shadow-sm text-center">
+          <Handshake class="text-gray-300 mb-6 mx-auto" :size="60" />
+          <h3 class="text-lg font-medium text-gray-600 mb-2">加载失败</h3>
+          <p class="text-sm text-gray-400">请稍后再试</p>
+        </div>
+
+        <!-- 空状态 -->
         <div v-else class="bg-white rounded-lg p-16 shadow-sm text-center">
           <Handshake class="text-gray-300 mb-6 mx-auto" :size="60" />
           <h3 class="text-lg font-medium text-gray-600 mb-2">暂无投标记录</h3>

@@ -73,3 +73,24 @@ func (s *JWTService) ValidateToken(tokenString string) (*Claims, error) {
 
 	return nil, ErrInvalidToken
 }
+
+// ParseTokenIgnoreExpiry 解析 token，忽略过期错误但验证签名
+// 用于 refresh 场景：token 过期但签名有效时，允许换发新 token
+func (s *JWTService) ParseTokenIgnoreExpiry(tokenString string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, ErrInvalidToken
+		}
+		return s.secretKey, nil
+	}, jwt.WithoutClaimsValidation())
+
+	if err != nil {
+		return nil, ErrInvalidToken
+	}
+
+	if claims, ok := token.Claims.(*Claims); ok {
+		return claims, nil
+	}
+
+	return nil, ErrInvalidToken
+}

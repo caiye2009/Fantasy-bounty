@@ -209,6 +209,7 @@ const handleSendCode = async () => {
 // 提供给子组件使用
 provide('isLoggedIn', isLoggedIn)
 provide('openLoginModal', openLoginModal)
+provide('currentPage', currentPage)
 
 // 导航菜单（个人中心通过头像进入，不在导航栏显示）
 const navItems = [
@@ -386,13 +387,13 @@ const handleLogout = () => {
     <!-- Main Content -->
     <main class="flex-1 w-full flex justify-center">
       <!-- 悬赏大厅 -->
-      <BountyHall v-if="currentPage === 'hall'" />
+      <BountyHall v-show="currentPage === 'hall'" />
 
       <!-- 接单记录 -->
-      <MyBids v-else-if="currentPage === 'myBids'" />
+      <MyBids v-show="currentPage === 'myBids'" />
 
       <!-- 个人中心 -->
-      <MyProfile v-else-if="currentPage === 'profile'" />
+      <MyProfile v-if="currentPage === 'profile'" />
 
     </main>
 

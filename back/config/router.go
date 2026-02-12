@@ -96,6 +96,7 @@ func SetupRouter() (*gin.Engine, func()) {
 		{
 			authGroup.POST("/send-code", authHandler.SendCode)     // 发送验证码
 			authGroup.POST("/verify-code", authHandler.VerifyCode) // 验证码登录/注册
+			authGroup.POST("/refresh", authHandler.RefreshToken)   // 刷新 token
 		}
 
 		// ========== 供应商业务路由 ==========

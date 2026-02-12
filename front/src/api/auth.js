@@ -1,29 +1,20 @@
+import { authFetch } from './request'
+import {
+  getToken, setToken, removeToken,
+  getPhone, setPhone, removePhone,
+  getUsername, setUsername, removeUsername,
+  isAuthenticated,
+} from './token'
+
+// 重新导出 token 操作，保持外部引用不变
+export {
+  getToken, setToken, removeToken,
+  getPhone, setPhone, removePhone,
+  getUsername, setUsername, removeUsername,
+  isAuthenticated,
+}
+
 const API_BASE = '/api/v1'
-
-// Token 管理
-const TOKEN_KEY = 'token'
-const PHONE_KEY = 'user_phone'
-const USERNAME_KEY = 'user_username'
-
-export const getToken = () => localStorage.getItem(TOKEN_KEY)
-
-export const setToken = (token) => localStorage.setItem(TOKEN_KEY, token)
-
-export const removeToken = () => localStorage.removeItem(TOKEN_KEY)
-
-export const getPhone = () => localStorage.getItem(PHONE_KEY)
-
-export const setPhone = (phone) => localStorage.setItem(PHONE_KEY, phone)
-
-export const removePhone = () => localStorage.removeItem(PHONE_KEY)
-
-export const getUsername = () => localStorage.getItem(USERNAME_KEY)
-
-export const setUsername = (username) => localStorage.setItem(USERNAME_KEY, username)
-
-export const removeUsername = () => localStorage.removeItem(USERNAME_KEY)
-
-export const isAuthenticated = () => !!getToken()
 
 // 模拟验证码（开发阶段使用）
 const MOCK_CODE = '123'
@@ -118,12 +109,8 @@ export const getMyCompanyStatus = async () => {
     throw new Error('未登录')
   }
 
-  const response = await fetch(`${API_BASE}/companies/my`, {
+  const response = await authFetch(`${API_BASE}/companies/my`, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    }
   })
 
   const result = await response.json()
@@ -149,11 +136,8 @@ export const recognizeLicense = async (file) => {
   const formData = new FormData()
   formData.append('license', file)
 
-  const response = await fetch(`${API_BASE}/companies/recognize`, {
+  const response = await authFetch(`${API_BASE}/companies/recognize`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`
-    },
     body: formData
   })
 
@@ -177,12 +161,8 @@ export const applyCompany = async (data) => {
     throw new Error('未登录')
   }
 
-  const response = await fetch(`${API_BASE}/companies/apply`, {
+  const response = await authFetch(`${API_BASE}/companies/apply`, {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
     body: JSON.stringify(data)
   })
 

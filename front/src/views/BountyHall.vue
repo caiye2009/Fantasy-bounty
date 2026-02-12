@@ -4,13 +4,31 @@ import { ElMessage } from 'element-plus'
 import { Search, Phone, Mail, Loader2, Inbox, X, Calendar, Truck, Tag } from 'lucide-vue-next'
 import BountyCard from '@/components/BountyCard.vue'
 import { placeBid } from '@/api/bid'
-import { fetchBountyList, peekBountyList } from '@/api/bounty'
+import { useBountyHall } from '@/composables/useBountyHall'
+import { formatDate, formatComposition } from '@/utils/format'
 
 // 从父组件注入登录状态和登录modal控制
 const isLoggedIn = inject('isLoggedIn')
 const openLoginModal = inject('openLoginModal')
+const currentPage = inject('currentPage')
 
-// 需要登录才能执行的操作
+// ========== 数据层：composable ==========
+const {
+  searchKeyword,
+  filterBeginDate,
+  filterEndDate,
+  filterIncludeEnd,
+  displayTasks,
+  loading,
+  total,
+  error,
+  loadBountyList,
+  clearFilters,
+  hasFilters,
+  init,
+} = useBountyHall(isLoggedIn)
+
+// ========== 登录检查 ==========
 const requireLogin = (callback) => {
   if (!isLoggedIn.value) {
     openLoginModal()
@@ -20,44 +38,7 @@ const requireLogin = (callback) => {
   return true
 }
 
-// 悬赏类型中英文对照
-const bountyTypeMap = {
-  woven: '梭织',
-  knitted: '针织'
-}
-
-// ========== 筛选状态 ==========
-const searchKeyword = ref('')
-const filterBeginDate = ref('')
-const filterEndDate = ref('')
-const filterIncludeEnd = ref('0')
-
-// ========== 登录后的悬赏列表（老系统接口） ==========
-const tasks = ref([])
-const loading = ref(false)
-const total = ref(0)
-
-// 加载悬赏列表（登录后调用老系统接口）
-const loadBountyList = async () => {
-  loading.value = true
-  try {
-    const result = await fetchBountyList({
-      keyword: searchKeyword.value,
-      beginDate: filterBeginDate.value,
-      endDate: filterEndDate.value,
-      includeEnd: filterIncludeEnd.value,
-    })
-    tasks.value = result.data.map(item => transformBountyItem(item))
-    total.value = result.total
-  } catch (error) {
-    console.error('加载悬赏列表失败:', error)
-    ElMessage.error('加载悬赏列表失败，请重试')
-  } finally {
-    loading.value = false
-  }
-}
-
-// 搜索防抖
+// ========== 搜索交互 ==========
 let searchTimeout = null
 const handleSearchInput = () => {
   if (!requireLogin()) return
@@ -67,29 +48,21 @@ const handleSearchInput = () => {
   }, 400)
 }
 
-// 回车立即搜索
 const handleSearchEnter = () => {
   if (!requireLogin()) return
   if (searchTimeout) clearTimeout(searchTimeout)
   loadBountyList()
 }
 
-// 筛选变化
 const handleFilterChange = () => {
   if (!requireLogin()) return
   loadBountyList()
 }
 
-// 清除筛选
 const handleClearFilters = () => {
-  searchKeyword.value = ''
-  filterBeginDate.value = ''
-  filterEndDate.value = ''
-  filterIncludeEnd.value = '0'
-  if (isLoggedIn.value) loadBountyList()
+  clearFilters()
 }
 
-// 点击筛选控件时检查登录
 const onFilterClick = (event) => {
   if (!isLoggedIn.value) {
     event.preventDefault()
@@ -98,229 +71,24 @@ const onFilterClick = (event) => {
   }
 }
 
-// ========== 未登录的预览列表 ==========
-const peekTasks = ref([])
-const peekLoading = ref(false)
-
-// 加载预览列表（未登录时使用）
-const loadPeekBounties = async () => {
-  peekLoading.value = true
-  try {
-    const result = await peekBountyList()
-    peekTasks.value = result.data.map(item => transformBountyItem(item))
-  } catch (error) {
-    console.error('加载悬赏列表失败:', error)
-  } finally {
-    peekLoading.value = false
-  }
-}
-
-// 计算当前显示的任务列表
-const displayTasks = ref([])
-
-// 监听登录状态变化
-watch(isLoggedIn, (loggedIn) => {
-  if (loggedIn) {
-    // 登录后加载完整列表
-    handleClearFilters()
-  } else {
-    // 登出后显示 peek 预览列表
-    loadPeekBounties()
-  }
-}, { immediate: false })
-
-// 监听登录列表变化
-watch(tasks, (newTasks) => {
-  if (isLoggedIn.value) {
-    displayTasks.value = newTasks
-  }
-}, { deep: true })
-
-// 监听预览数据变化
-watch(peekTasks, (newTasks) => {
-  if (!isLoggedIn.value) {
-    displayTasks.value = newTasks
-  }
-}, { deep: true })
-
-// 转换悬赏数据格式（统一处理 API 返回的数据）
-const transformBountyItem = (item) => {
-  const id = item.id
-  const productName = item.product_name || item.productName
-  const productCode = item.product_code || item.productCode
-  const createdAt = item.created_at || item.createdAt
-  const bidDeadline = item.bid_deadline || item.bidDeadline
-  const bountyType = item.bounty_type || item.bountyType
-  const status = item.status
-  const sampleType = item.sample_type || item.sampleType
-  const expectedDeliveryDate = item.expected_delivery_date || item.expectedDeliveryDate
-
-  // 重建 spec 对象
-  let wovenSpec = item.wovenSpec
-  let knittedSpec = item.knittedSpec
-
-  // 如果没有嵌套对象，从扁平字段构建
-  if (!wovenSpec && !knittedSpec) {
-    if (bountyType === 'woven') {
-      wovenSpec = {
-        composition: item.composition,
-        fabricWeight: item.fabric_weight,
-        fabricWidth: item.fabric_width,
-        warpDensity: item.warp_density,
-        weftDensity: item.weft_density,
-        warpMaterial: item.warp_material,
-        weftMaterial: item.weft_material,
-        quantityMeters: item.quantity_meters
-      }
-    } else if (bountyType === 'knitted') {
-      knittedSpec = {
-        composition: item.composition,
-        fabricWeight: item.fabric_weight,
-        fabricWidth: item.fabric_width,
-        machineType: item.machine_type,
-        materials: item.materials,
-        quantityKg: item.quantity_kg
-      }
-    }
-  }
-
-  return {
-    id,
-    title: productName,
-    productCode,
-    publishTime: formatDateTime(createdAt),
-    tags: generateTagsFromData({ bountyType, sampleType, status }),
-    description: generateDescriptionFromData({ bountyType, wovenSpec, knittedSpec }),
-    deadline: formatDate(bidDeadline),
-    bountyType,
-    status,
-    wovenSpec,
-    knittedSpec,
-    expectedDeliveryDate
-  }
-}
-
-// 从数据生成标签
-const generateTagsFromData = (data) => {
-  const tags = []
-  if (data.bountyType) tags.push(bountyTypeMap[data.bountyType] || data.bountyType)
-  if (data.sampleType) tags.push(data.sampleType)
-  return tags
-}
-
-// 从数据生成描述
-const generateDescriptionFromData = (data) => {
-  const parts = []
-  if (data.bountyType === 'woven' && data.wovenSpec) {
-    const spec = data.wovenSpec
-    if (spec.composition) {
-      const compStr = typeof spec.composition === 'object'
-        ? Object.entries(spec.composition).map(([n, p]) => `${n} ${(p * 100).toFixed(0)}%`).join(' / ')
-        : spec.composition
-      parts.push(`成分: ${compStr}`)
-    }
-    if (spec.fabricWeight) parts.push(`克重: ${spec.fabricWeight}g/m²`)
-    if (spec.fabricWidth) parts.push(`幅宽: ${spec.fabricWidth}cm`)
-    if (spec.quantityMeters) parts.push(`需求: ${spec.quantityMeters}米`)
-  } else if (data.bountyType === 'knitted' && data.knittedSpec) {
-    const spec = data.knittedSpec
-    if (spec.composition) {
-      const compStr = typeof spec.composition === 'object'
-        ? Object.entries(spec.composition).map(([n, p]) => `${n} ${(p * 100).toFixed(0)}%`).join(' / ')
-        : spec.composition
-      parts.push(`成分: ${compStr}`)
-    }
-    if (spec.fabricWeight) parts.push(`克重: ${spec.fabricWeight}g/m²`)
-    if (spec.fabricWidth) parts.push(`幅宽: ${spec.fabricWidth}cm`)
-    if (spec.quantityKg) parts.push(`需求: ${spec.quantityKg}kg`)
-  }
-  return parts.length > 0 ? parts.join(' | ') : '暂无详细规格'
-}
-
-// 格式化日期时间
-const formatDateTime = (dateStr) => {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).replace(/\//g, '-')
-}
-
-// 格式化日期
-const formatDate = (dateStr) => {
-  if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).replace(/\//g, '-')
-}
-
-// 格式化面料成分
-const formatComposition = (composition) => {
-  if (!composition) return ''
-  if (typeof composition === 'string') return composition
-  if (typeof composition === 'object') {
-    return Object.entries(composition)
-      .map(([name, pct]) => {
-        const percent = pct * 100
-        return `${name} ${percent % 1 === 0 ? percent.toFixed(0) : percent.toFixed(1)}%`
-      })
-      .join(' / ')
-  }
-  return ''
-}
-
-// ESC 键关闭弹窗/抽屉（Modal 优先于抽屉）
-const handleKeydown = (e) => {
-  if (e.key === 'Escape') {
-    if (bidModalVisible.value) {
-      closeBidModal()
-    } else if (drawerVisible.value) {
-      closeDrawer()
-    }
-  }
-}
-
-onMounted(() => {
-  if (isLoggedIn.value) {
-    loadBountyList()
-  } else {
-    loadPeekBounties()
-  }
-  document.addEventListener('keydown', handleKeydown)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeydown)
-})
-
-// 抽屉状态
+// ========== 抽屉 ==========
 const drawerVisible = ref(false)
 const selectedTask = ref(null)
 
 const openDrawer = (task) => {
-  // 查看详情需要登录
   if (!requireLogin()) return
   selectedTask.value = task
   drawerVisible.value = true
-  // 禁用页面滚动
   document.body.style.overflow = 'hidden'
 }
 
 const closeDrawer = () => {
   drawerVisible.value = false
   selectedTask.value = null
-  // 恢复页面滚动
   document.body.style.overflow = ''
 }
 
-// 投标 Modal 状态
+// ========== 投标 Modal ==========
 const bidModalVisible = ref(false)
 const bidAmount = ref('')
 const bidSubmitting = ref(false)
@@ -343,12 +111,10 @@ const deliveryMethodOptions = ['竞标确认后', '签订合同后', '收到预�
 
 const openBidModal = () => {
   bidAmount.value = ''
-  // 重置梭织字段
   wovenSizeLength.value = ''
   wovenGreigeFabricType.value = ''
   wovenGreigeDeliveryDate.value = ''
   wovenDeliveryMethod.value = ''
-  // 重置针织字段
   knittedSizeWeight.value = ''
   knittedGreigeFabricType.value = ''
   knittedGreigeDeliveryDate.value = ''
@@ -369,7 +135,6 @@ const submitBid = async () => {
 
   const bountyType = selectedTask.value.bountyType
 
-  // 验证必填字段
   if (bountyType === 'woven') {
     if (!wovenSizeLength.value || !wovenGreigeFabricType.value || !wovenGreigeDeliveryDate.value || !wovenDeliveryMethod.value) {
       ElMessage.warning('请填写完整的梭织规格信息')
@@ -409,8 +174,8 @@ const submitBid = async () => {
     ElMessage.success('投标成功！')
     closeBidModal()
     closeDrawer()
-  } catch (error) {
-    console.error('投标失败:', error)
+  } catch (err) {
+    console.error('投标失败:', err)
     ElMessage.error('投标失败，请重试')
   } finally {
     bidSubmitting.value = false
@@ -421,10 +186,32 @@ const handleBid = () => {
   openBidModal()
 }
 
-// 是否有筛选条件
-const hasFilters = () => {
-  return searchKeyword.value || filterBeginDate.value || filterEndDate.value || filterIncludeEnd.value === '1'
+// ========== 键盘事件 ==========
+const handleKeydown = (e) => {
+  if (e.key === 'Escape') {
+    if (bidModalVisible.value) {
+      closeBidModal()
+    } else if (drawerVisible.value) {
+      closeDrawer()
+    }
+  }
 }
+
+// 切回本页时刷新数据
+watch(currentPage, (page) => {
+  if (page === 'hall') {
+    init()
+  }
+})
+
+onMounted(() => {
+  init()
+  document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
@@ -451,7 +238,6 @@ const hasFilters = () => {
 
           <!-- 筛选器 -->
           <div class="space-y-3">
-            <!-- 发布开始日期 -->
             <div class="flex items-center gap-2">
               <span class="text-sm text-gray-600 whitespace-nowrap w-16">开始日期</span>
               <el-date-picker
@@ -464,7 +250,6 @@ const hasFilters = () => {
               />
             </div>
 
-            <!-- 发布结束日期 -->
             <div class="flex items-center gap-2">
               <span class="text-sm text-gray-600 whitespace-nowrap w-16">结束日期</span>
               <el-date-picker
@@ -477,7 +262,6 @@ const hasFilters = () => {
               />
             </div>
 
-            <!-- 是否包含已截止 -->
             <div class="flex items-center gap-2">
               <span class="text-sm text-gray-600 whitespace-nowrap w-16">已截止</span>
               <el-select
@@ -537,9 +321,16 @@ const hasFilters = () => {
       <!-- 右侧：任务列表 -->
       <div class="flex-1 min-w-0 flex flex-col gap-5">
         <!-- 加载状态 -->
-        <div v-if="loading || peekLoading" class="bg-white rounded-lg p-16 shadow-sm text-center">
+        <div v-if="loading" class="bg-white rounded-lg p-16 shadow-sm text-center">
           <Loader2 class="text-gray-300 mb-4 animate-spin mx-auto" :size="40" />
           <p class="text-gray-500">加载中...</p>
+        </div>
+
+        <!-- 错误状态 -->
+        <div v-else-if="error" class="bg-white rounded-lg p-16 shadow-sm text-center">
+          <Inbox class="text-gray-300 mb-6 mx-auto" :size="60" />
+          <h3 class="text-lg font-medium text-gray-600 mb-2">加载失败</h3>
+          <p class="text-sm text-gray-400">请稍后再试</p>
         </div>
 
         <!-- 空状态 -->
@@ -563,8 +354,6 @@ const hasFilters = () => {
           :deadline="task.deadline"
           @click="openDrawer(task)"
         />
-
-        <!-- 内部系统接口暂无分页，后续可添加 -->
       </div>
     </div>
 
