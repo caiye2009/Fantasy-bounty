@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	swaggerFiles "github.com/swaggo/files"
 )
 
 // SetupRouter 设置路由，返回 router 和清理函数
@@ -83,6 +85,9 @@ func SetupRouter() (*gin.Engine, func()) {
 		getEnv("INTERNAL_PASSWORD", ""),
 	)
 
+	// 启动时刷新一次 token，并开启后台自动刷新
+	tokenManager.Start()
+
 	// 初始化内部系统反向代理
 	internalProxy := proxy.NewInternalProxy(tokenManager, getEnv("INTERNAL_API_URL", ""), jwtService)
 
@@ -100,9 +105,9 @@ func SetupRouter() (*gin.Engine, func()) {
 		}
 
 		// ========== 供应商业务路由 ==========
-		// 需要外部JWT认证 + 审计
+		// TODO: 临时关闭JWT认证，前端直接调用调试
 		supplierGroup := v1.Group("/supplier")
-		supplierGroup.Use(middleware.JWTAuth(jwtService))
+		// supplierGroup.Use(middleware.JWTAuth(jwtService))
 		supplierGroup.Use(middleware.Audit(auditService))
 		{
 			// Bid 路由
@@ -135,6 +140,18 @@ func SetupRouter() (*gin.Engine, func()) {
 			}
 		}
 
+		// ========== 代理转发路由（无JWT） ==========
+		proxyGroup := v1.Group("/proxy")
+		{
+			proxyGroup.POST("/bind-wechat", internalProxy.BindWeChatHandler())
+			proxyGroup.POST("/get-by-wechat", internalProxy.GetByWeChatHandler())
+			proxyGroup.POST("/inquiry-query", internalProxy.InquiryQueryHandler())
+			proxyGroup.POST("/inquiry-detail", internalProxy.InquiryDetailHandler())
+			proxyGroup.POST("/quote-delete", internalProxy.QuoteDeleteHandler())
+			proxyGroup.POST("/quote-save", internalProxy.QuoteSaveHandler())
+			proxyGroup.POST("/refresh-token", internalProxy.ForceRefreshTokenHandler())
+		}
+
 		// ========== 内部系统路由 ==========
 		internalGroup := v1.Group("/internal")
 		internalGroup.Use(middleware.Audit(auditService))
@@ -145,8 +162,9 @@ func SetupRouter() (*gin.Engine, func()) {
 			// ========== 外部用户访问的路径（供应商） ==========
 			// 需要验证外部JWT，通过后转换成内部token访问老系统
 			// 使用专门的 BountiesHandler（通用 Handler 依赖 *path 参数，这里不适用）
-			internalGroup.GET("/bounties", middleware.JWTAuth(jwtService), internalProxy.BountiesHandler())
-			internalGroup.GET("/bounties/:id", middleware.JWTAuth(jwtService), internalProxy.BountiesHandler())
+			// TODO: 临时关闭JWT认证，前端直接调用调试
+			internalGroup.GET("/bounties", internalProxy.BountiesHandler())
+			internalGroup.GET("/bounties/:id", internalProxy.BountiesHandler())
 
 			// TODO: 在这里添加其他外部用户可以访问的路径
 			// internalGroup.GET("/search", middleware.JWTAuth(jwtService), internalProxy.Handler())
@@ -162,6 +180,9 @@ func SetupRouter() (*gin.Engine, func()) {
 
 	// 静态文件服务 - 营业执照图片
 	router.Static("/uploads", "./uploads")
+
+	// Swagger 文档
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// 健康检查
 	router.GET("/health", func(c *gin.Context) {

@@ -1,7 +1,13 @@
+// @title           Fantasy Bounty API
+// @version         1.0
+// @description     极绎贸易招投标系统对外接口
+// @basePath        /api/v1
+
 package main
 
 import (
 	"back/config"
+	_ "back/docs"
 	"log"
 
 	"github.com/joho/godotenv"

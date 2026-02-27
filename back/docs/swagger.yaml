@@ -1,0 +1,812 @@
+basePath: /api/v1
+definitions:
+  auth.ErrorResponse:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+    type: object
+  auth.InternalLoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  auth.SendCodeRequest:
+    properties:
+      phone:
+        type: string
+    required:
+    - phone
+    type: object
+  auth.SendCodeResponse:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+    type: object
+  auth.VerifyCodeRequest:
+    properties:
+      code:
+        type: string
+      phone:
+        type: string
+    required:
+    - code
+    - phone
+    type: object
+  auth.VerifyCodeResponse:
+    properties:
+      code:
+        type: integer
+      isNewUser:
+        description: 是否新用户（首次注册）
+        type: boolean
+      message:
+        type: string
+      token:
+        type: string
+      username:
+        type: string
+    type: object
+  bid.Bid:
+    properties:
+      bidPrice:
+        description: 投标价格
+        type: number
+      bountyId:
+        type: integer
+      createdAt:
+        type: string
+      id:
+        type: string
+      knittedSpec:
+        $ref: '#/definitions/bid.BidKnittedSpec'
+      status:
+        description: pending, in_progress, pending_acceptance, completed
+        type: string
+      updatedAt:
+        type: string
+      username:
+        description: 关联用户名
+        type: string
+      wovenSpec:
+        allOf:
+        - $ref: '#/definitions/bid.BidWovenSpec'
+        description: 关联规格 - 根据悬赏类型只会有一个有值
+    type: object
+  bid.BidKnittedSpec:
+    properties:
+      bidId:
+        type: string
+      deliveryMethod:
+        description: 交货方式
+        type: string
+      greigeDeliveryDate:
+        description: 胚布交期
+        type: string
+      greigeFabricType:
+        description: 胚布类型（现货/定织）
+        type: string
+      id:
+        type: integer
+      sizeWeight:
+        description: 尺码（重量/皮重）
+        type: number
+    type: object
+  bid.BidListResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/bid.Bid'
+        type: array
+      message:
+        type: string
+      total:
+        type: integer
+    type: object
+  bid.BidResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/bid.Bid'
+      message:
+        type: string
+    type: object
+  bid.BidWovenSpec:
+    properties:
+      bidId:
+        type: string
+      deliveryMethod:
+        description: 交货方式
+        type: string
+      greigeDeliveryDate:
+        description: 胚布交期
+        type: string
+      greigeFabricType:
+        description: 胚布类型（现货/定织）
+        type: string
+      id:
+        type: integer
+      sizeLength:
+        description: 尺码（长度）
+        type: number
+    type: object
+  bid.CreateBidKnittedSpecRequest:
+    properties:
+      deliveryMethod:
+        description: 竞标确认后 / 签订合同后 / 收到预付款后
+        type: string
+      greigeDeliveryDate:
+        type: string
+      greigeFabricType:
+        description: 现货 / 定织
+        type: string
+      sizeWeight:
+        type: number
+    type: object
+  bid.CreateBidRequest:
+    properties:
+      bidPrice:
+        type: number
+      bountyId:
+        type: integer
+      knittedSpec:
+        $ref: '#/definitions/bid.CreateBidKnittedSpecRequest'
+      wovenSpec:
+        $ref: '#/definitions/bid.CreateBidWovenSpecRequest'
+    required:
+    - bidPrice
+    - bountyId
+    type: object
+  bid.CreateBidWovenSpecRequest:
+    properties:
+      deliveryMethod:
+        description: 竞标确认后 / 签订合同后 / 收到预付款后
+        type: string
+      greigeDeliveryDate:
+        type: string
+      greigeFabricType:
+        description: 现货 / 定织
+        type: string
+      sizeLength:
+        type: number
+    type: object
+  bid.ErrorResponse:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+    type: object
+  proxy.BaseResponse:
+    properties:
+      data: {}
+      isSucceed:
+        type: boolean
+      message:
+        type: string
+      outData: {}
+      statusCode:
+        type: integer
+      time:
+        type: integer
+    type: object
+  proxy.BindWeChatOutData:
+    properties:
+      intRetVal:
+        type: integer
+      strMessage:
+        type: string
+    type: object
+  proxy.BindWeChatRequest:
+    properties:
+      CustomerCode:
+        example: PD0201
+        type: string
+      Mobile:
+        example: "13800138000"
+        type: string
+      Openid:
+        example: oXxx123abc
+        type: string
+      Type:
+        description: 0:公众号 1:小程序
+        example: "1"
+        type: string
+    type: object
+  proxy.BindWeChatResponse:
+    properties:
+      data:
+        description: 'TODO: 待补充'
+      isSucceed:
+        type: boolean
+      message:
+        type: string
+      outData:
+        $ref: '#/definitions/proxy.BindWeChatOutData'
+      statusCode:
+        type: integer
+      time:
+        type: integer
+    type: object
+  proxy.GetByWeChatOutData:
+    properties:
+      intRetVal:
+        type: integer
+    type: object
+  proxy.GetByWeChatRequest:
+    properties:
+      Openid:
+        example: oXxx123abc
+        type: string
+      Type:
+        description: 0:公众号 1:小程序
+        example: "1"
+        type: string
+    type: object
+  proxy.GetByWeChatResponse:
+    properties:
+      data:
+        description: 'TODO: 待补充（空数组=未绑定，有数据=已绑定）'
+      isSucceed:
+        type: boolean
+      message:
+        type: string
+      outData:
+        $ref: '#/definitions/proxy.GetByWeChatOutData'
+      statusCode:
+        type: integer
+      time:
+        type: integer
+    type: object
+  proxy.InquiryDetailOutData:
+    properties:
+      strMessage:
+        type: string
+    type: object
+  proxy.InquiryDetailRequest:
+    properties:
+      InquiryId:
+        example: INQ-2024-001
+        type: string
+      Supplier:
+        example: C001
+        type: string
+    type: object
+  proxy.InquiryDetailResponse:
+    properties:
+      data:
+        description: 'TODO: 待补充'
+      isSucceed:
+        type: boolean
+      message:
+        type: string
+      outData:
+        $ref: '#/definitions/proxy.InquiryDetailOutData'
+      statusCode:
+        type: integer
+      time:
+        type: integer
+    type: object
+  proxy.InquiryQueryRequest:
+    properties:
+      BeginDate:
+        description: 发布开始时间，可选
+        example: ""
+        type: string
+      EndDate:
+        description: 发布结束时间，可选
+        example: ""
+        type: string
+      IncludeEnd:
+        description: 是否包含已截止 1:包含 0:不包含
+        example: "0"
+        type: string
+      P_chnName:
+        description: 产品名称，模糊查询，可选
+        example: ""
+        type: string
+      Supplier:
+        example: C001
+        type: string
+    type: object
+  proxy.InquiryQueryResponse:
+    properties:
+      data:
+        description: 'TODO: 待补充'
+      isSucceed:
+        type: boolean
+      message:
+        type: string
+      outData: {}
+      statusCode:
+        type: integer
+      time:
+        type: integer
+    type: object
+  proxy.QuoteDeleteOutData:
+    properties:
+      strMessage:
+        type: string
+    type: object
+  proxy.QuoteDeleteRequest:
+    properties:
+      OperateType:
+        description: Cancel:撤回 Delete:删除
+        example: Cancel
+        type: string
+      QuoteId:
+        example: QT-2024-001
+        type: string
+      Supplier:
+        example: C001
+        type: string
+    type: object
+  proxy.QuoteDeleteResponse:
+    properties:
+      data:
+        description: 'TODO: 待补充'
+      isSucceed:
+        type: boolean
+      message:
+        type: string
+      outData:
+        $ref: '#/definitions/proxy.QuoteDeleteOutData'
+      statusCode:
+        type: integer
+      time:
+        type: integer
+    type: object
+  proxy.QuoteSaveOutData:
+    properties:
+      ReturnId:
+        type: string
+      strMessage:
+        type: string
+    type: object
+  proxy.QuoteSaveRequest:
+    properties:
+      Id:
+        description: 空=新增
+        example: ""
+        type: string
+      InquiryId:
+        example: INQ-2024-001
+        type: string
+      LeadDays:
+        example: 7
+        type: integer
+      LeadTimeStartDate:
+        example: "1"
+        type: string
+      Payment:
+        example: 货到付款
+        type: string
+      Price:
+        example: "13.00"
+        type: string
+      QStatus:
+        description: 0:草稿 1:已撤回 2:已提交
+        example: "0"
+        type: string
+      QuoteJson:
+        example: ""
+        type: string
+      Remark:
+        example: ""
+        type: string
+      StockStatus:
+        example: "1"
+        type: string
+      Supplier:
+        example: C001
+        type: string
+      TaxRate:
+        example: "0.13"
+        type: string
+      Unit:
+        example: 个
+        type: string
+      isShipping:
+        example: "1"
+        type: string
+      isTax:
+        example: "1"
+        type: string
+    type: object
+  proxy.QuoteSaveResponse:
+    properties:
+      data:
+        description: 'TODO: 待补充'
+      isSucceed:
+        type: boolean
+      message:
+        type: string
+      outData:
+        $ref: '#/definitions/proxy.QuoteSaveOutData'
+      statusCode:
+        type: integer
+      time:
+        type: integer
+    type: object
+info:
+  contact: {}
+  description: 极绎贸易招投标系统对外接口
+  title: Fantasy Bounty API
+  version: "1.0"
+paths:
+  /api/v1/auth/send-code:
+    post:
+      consumes:
+      - application/json
+      description: 向手机号发送登录/注册验证码
+      parameters:
+      - description: 手机号
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.SendCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.SendCodeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      summary: 发送验证码
+      tags:
+      - auth
+  /api/v1/auth/verify-code:
+    post:
+      consumes:
+      - application/json
+      description: 通过手机号和验证码进行登录，若手机号未注册则自动注册
+      parameters:
+      - description: 手机号和验证码
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.VerifyCodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.VerifyCodeResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      summary: 验证码登录/注册
+      tags:
+      - auth
+  /api/v1/bids:
+    get:
+      description: 根据赏金ID获取竞标列表
+      parameters:
+      - description: 赏金ID
+        in: query
+        name: bounty_id
+        required: true
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/bid.BidListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/bid.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/bid.ErrorResponse'
+      summary: 获取竞标列表
+      tags:
+      - bid
+    post:
+      consumes:
+      - application/json
+      description: 为指定赏金创建竞标
+      parameters:
+      - description: 竞标信息
+        in: body
+        name: bid
+        required: true
+        schema:
+          $ref: '#/definitions/bid.CreateBidRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/bid.BidResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/bid.ErrorResponse'
+      summary: 创建竞标
+      tags:
+      - bid
+  /api/v1/bids/{id}:
+    delete:
+      description: 删除指定竞标
+      parameters:
+      - description: 竞标ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/bid.ErrorResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/bid.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/bid.ErrorResponse'
+      summary: 删除竞标
+      tags:
+      - bid
+  /api/v1/bids/my:
+    get:
+      description: 获取当前用户的竞标列表
+      parameters:
+      - description: '状态筛选: draft, pending, in_progress, pending_acceptance, completed'
+        in: query
+        name: status
+        type: string
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每页数量
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/bid.BidListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/bid.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/bid.ErrorResponse'
+      summary: 获取我的竞标列表
+      tags:
+      - bid
+  /api/v1/internal/login:
+    post:
+      consumes:
+      - application/json
+      description: 将登录请求转发到内部系统，返回内部系统的token
+      parameters:
+      - description: 工号和密码
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.InternalLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "502":
+          description: Bad Gateway
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      summary: 内部系统登录
+      tags:
+      - auth
+  /proxy/bind-wechat:
+    post:
+      consumes:
+      - application/json
+      description: 验证供应商身份并绑定 OpenId，成功后 isSucceed=true
+      parameters:
+      - description: 绑定参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/proxy.BindWeChatRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/proxy.BindWeChatResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/proxy.BaseResponse'
+      summary: 微信端绑定供应商
+      tags:
+      - proxy
+  /proxy/get-by-wechat:
+    post:
+      consumes:
+      - application/json
+      description: data 有数据=已绑定供应商；data 为空数组=未绑定；isSucceed=false 看 message
+      parameters:
+      - description: 查询参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/proxy.GetByWeChatRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/proxy.GetByWeChatResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/proxy.BaseResponse'
+      summary: 根据 Openid 获取供应商信息
+      tags:
+      - proxy
+  /proxy/inquiry-detail:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 查询参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/proxy.InquiryDetailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/proxy.InquiryDetailResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/proxy.BaseResponse'
+      summary: 供应商查看采购需求详情及报价情况
+      tags:
+      - proxy
+  /proxy/inquiry-query:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 查询参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/proxy.InquiryQueryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/proxy.InquiryQueryResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/proxy.BaseResponse'
+      summary: 查询供应商可报价的招标信息
+      tags:
+      - proxy
+  /proxy/quote-delete:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 操作参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/proxy.QuoteDeleteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/proxy.QuoteDeleteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/proxy.BaseResponse'
+      summary: 撤回或删除供应商报价
+      tags:
+      - proxy
+  /proxy/quote-save:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: 报价参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/proxy.QuoteSaveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/proxy.QuoteSaveResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/proxy.BaseResponse'
+      summary: 供应商提交或保存报价
+      tags:
+      - proxy
+swagger: "2.0"
