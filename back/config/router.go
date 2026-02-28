@@ -61,8 +61,19 @@ func SetupRouter() (*gin.Engine, func()) {
 	userRepo := user.NewRepository(DB)
 	userService := user.NewService(userRepo, cryptoService)
 
+	// 初始化内部系统 token 管理器（需要在 authHandler 之前初始化）
+	tokenManager := internal_token.NewManager(
+		getEnv("INTERNAL_API_URL", ""),
+		getEnv("INTERNAL_AUTH_PATH", "/auth/login"),
+		getEnv("INTERNAL_USERNAME", ""),
+		getEnv("INTERNAL_PASSWORD", ""),
+	)
+
+	// 启动时刷新一次 token，并开启后台自动刷新
+	tokenManager.Start()
+
 	// 初始化依赖
-	authHandler := auth.NewHandler(jwtService, userService)
+	authHandler := auth.NewHandler(jwtService, userService, tokenManager.GetToken, getEnv("INTERNAL_API_URL", ""))
 
 	// 初始化供应商服务（需要在 bid 之前初始化）
 	supplierRepo := supplier.NewRepository(DB)
@@ -77,17 +88,6 @@ func SetupRouter() (*gin.Engine, func()) {
 	// 初始化用户 handler（userService 已在上面初始化）
 	userHandler := user.NewHandler(userService)
 
-	// 初始化内部系统 token 管理器
-	tokenManager := internal_token.NewManager(
-		getEnv("INTERNAL_API_URL", ""),
-		getEnv("INTERNAL_AUTH_PATH", "/auth/login"),
-		getEnv("INTERNAL_USERNAME", ""),
-		getEnv("INTERNAL_PASSWORD", ""),
-	)
-
-	// 启动时刷新一次 token，并开启后台自动刷新
-	tokenManager.Start()
-
 	// 初始化内部系统反向代理
 	internalProxy := proxy.NewInternalProxy(tokenManager, getEnv("INTERNAL_API_URL", ""), jwtService)
 
@@ -99,9 +99,10 @@ func SetupRouter() (*gin.Engine, func()) {
 		authGroup := v1.Group("/auth")
 		authGroup.Use(middleware.Audit(auditService))
 		{
-			authGroup.POST("/send-code", authHandler.SendCode)     // 发送验证码
-			authGroup.POST("/verify-code", authHandler.VerifyCode) // 验证码登录/注册
-			authGroup.POST("/refresh", authHandler.RefreshToken)   // 刷新 token
+			authGroup.POST("/send-code", authHandler.SendCode)       // 发送验证码
+			authGroup.POST("/verify-code", authHandler.VerifyCode)   // 验证码登录/注册
+			authGroup.POST("/refresh", authHandler.RefreshToken)     // 刷新 token
+			authGroup.POST("/wechat-login", authHandler.WechatLogin) // 微信小程序登录
 		}
 
 		// ========== 供应商业务路由 ==========

@@ -1,5 +1,7 @@
 package auth
 
+import "encoding/json"
+
 // SendCodeRequest 发送验证码请求
 type SendCodeRequest struct {
 	Phone string `json:"phone" binding:"required"`
@@ -43,4 +45,34 @@ type RefreshTokenResponse struct {
 type ErrorResponse struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+}
+
+// WechatLoginRequest 微信小程序登录请求
+type WechatLoginRequest struct {
+	Code     string      `json:"code"     binding:"required"`
+	UserInfo interface{} `json:"userInfo"`
+}
+
+// wechatSessionResult 微信服务器 jscode2session 响应（内部使用）
+type wechatSessionResult struct {
+	OpenID     string `json:"openid"`
+	SessionKey string `json:"session_key"`
+	UnionID    string `json:"unionid"`
+	ErrCode    int    `json:"errcode"`
+	ErrMsg     string `json:"errmsg"`
+}
+
+// WechatLoginData 微信登录响应 data 字段
+type WechatLoginData struct {
+	Token        string          `json:"token"`
+	OpenID       string          `json:"openId"`
+	IsBound      bool            `json:"isBound"`
+	SupplierInfo json.RawMessage `json:"supplierInfo"` // 内部系统 BC_Customer_GetByWeChat 返回的 data 数组，未绑定时为 []
+}
+
+// WechatLoginResponse 微信登录响应
+type WechatLoginResponse struct {
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    WechatLoginData `json:"data"`
 }

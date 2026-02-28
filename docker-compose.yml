@@ -53,6 +53,9 @@ services:
       - INTERNAL_AUTH_PATH=/api/User/Login
       - INTERNAL_USERNAME=WBDY
       - INTERNAL_PASSWORD=Ftswbdy.
+      # 微信小程序配置
+      - WECHAT_APPID=wxc307e17056728471
+      - WECHAT_SECRET=4b47fa91c15106d61791113c6f7482bb
       # Gin模式
       - GIN_MODE=release
       # Elasticsearch配置

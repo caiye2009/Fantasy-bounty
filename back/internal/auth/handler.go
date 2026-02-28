@@ -33,12 +33,19 @@ type codeEntry struct {
 
 // Handler 认证处理器
 type Handler struct {
-	jwtService  *jwt.JWTService
-	userService user.Service
+	jwtService       *jwt.JWTService
+	userService      user.Service
+	getInternalToken func() (string, error) // 获取内部系统 token
+	internalAPIURL   string                 // 内部系统基础 URL
 }
 
 // NewHandler 创建新的 handler 实例
-func NewHandler(jwtService *jwt.JWTService, userService user.Service) *Handler {
+func NewHandler(
+	jwtService *jwt.JWTService,
+	userService user.Service,
+	getInternalToken func() (string, error),
+	internalAPIURL string,
+) *Handler {
 	// 启动后台清理过期验证码（每2分钟执行一次）
 	go func() {
 		ticker := time.NewTicker(2 * time.Minute)
@@ -56,8 +63,10 @@ func NewHandler(jwtService *jwt.JWTService, userService user.Service) *Handler {
 	}()
 
 	return &Handler{
-		jwtService:  jwtService,
-		userService: userService,
+		jwtService:       jwtService,
+		userService:      userService,
+		getInternalToken: getInternalToken,
+		internalAPIURL:   internalAPIURL,
 	}
 }
 
@@ -408,4 +417,171 @@ func (h *Handler) InternalLogin(c *gin.Context) {
 
 	// 透传内部系统的响应（包括状态码和body）
 	c.Data(resp.StatusCode, "application/json", respBody)
+}
+
+// WechatLogin 微信小程序登录
+// @Summary 微信小程序登录
+// @Description 用前端临时 code 换取 openid，再查询内部系统中该 openid 绑定的供应商信息
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body WechatLoginRequest true "微信登录参数"
+// @Success 200 {object} WechatLoginResponse
+// @Failure 400 {object} ErrorResponse
+// @Router /api/v1/auth/wechat-login [post]
+func (h *Handler) WechatLogin(c *gin.Context) {
+	var req WechatLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	// Step 1: 用 code 向微信服务器换取 openid
+	appid := os.Getenv("WECHAT_APPID")
+	secret := os.Getenv("WECHAT_SECRET")
+	if appid == "" || secret == "" {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "微信配置未设置(WECHAT_APPID/WECHAT_SECRET)",
+		})
+		return
+	}
+
+	wxURL := fmt.Sprintf(
+		"https://api.weixin.qq.com/sns/jscode2session?appid=%s&secret=%s&js_code=%s&grant_type=authorization_code",
+		appid, secret, req.Code,
+	)
+
+	wxResp, err := http.Get(wxURL) //nolint:gosec
+	if err != nil {
+		c.JSON(http.StatusBadGateway, ErrorResponse{
+			Code:    http.StatusBadGateway,
+			Message: "微信服务器请求失败",
+		})
+		return
+	}
+	defer wxResp.Body.Close()
+
+	var session wechatSessionResult
+	if err := json.NewDecoder(wxResp.Body).Decode(&session); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "解析微信响应失败",
+		})
+		return
+	}
+
+	if session.ErrCode != 0 {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Code:    http.StatusUnauthorized,
+			Message: fmt.Sprintf("微信授权失败: %s", session.ErrMsg),
+		})
+		return
+	}
+	fmt.Printf("[WECHAT-LOGIN] 获取 openid 成功: %s\n", session.OpenID)
+
+	// Step 2: 用 openid 查询内部系统绑定的供应商信息
+	supplierRaw, err := h.querySupplierByOpenID(session.OpenID)
+	if err != nil {
+		fmt.Printf("[WECHAT-LOGIN] 查询供应商失败: %v\n", err)
+		c.JSON(http.StatusBadGateway, ErrorResponse{
+			Code:    http.StatusBadGateway,
+			Message: "查询供应商信息失败: " + err.Error(),
+		})
+		return
+	}
+	fmt.Printf("[WECHAT-LOGIN] 内部系统原始响应: %s\n", string(supplierRaw))
+
+	// 解析内部系统响应，只取 data 字段
+	var internalResp struct {
+		IsSucceed bool              `json:"isSucceed"`
+		Data      []json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(supplierRaw, &internalResp); err != nil {
+		fmt.Printf("[WECHAT-LOGIN] 解析内部响应失败: %v\n", err)
+	}
+	isBound := internalResp.IsSucceed && len(internalResp.Data) > 0
+	fmt.Printf("[WECHAT-LOGIN] isBound=%v isSucceed=%v dataLen=%d\n", isBound, internalResp.IsSucceed, len(internalResp.Data))
+
+	// 将 data 序列化为 JSON（未绑定时为空数组 []）
+	supplierData, _ := json.Marshal(internalResp.Data)
+
+	// Step 3: 生成 JWT（以 openid 作为标识）
+	token, err := h.jwtService.GenerateToken(session.OpenID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "生成 token 失败",
+		})
+		return
+	}
+
+	message := "登录成功"
+	if !isBound {
+		message = "登录成功，该微信暂未绑定供应商"
+	}
+
+	// 设置审计信息
+	if rc := middleware.GetRequestContext(c); rc != nil {
+		rc.Action = "auth.wechat_login"
+		rc.Resource = "auth"
+		rc.Username = session.OpenID
+		rc.Detail = map[string]any{
+			"openid":   session.OpenID,
+			"is_bound": isBound,
+		}
+	}
+
+	c.JSON(http.StatusOK, WechatLoginResponse{
+		Code:    http.StatusOK,
+		Message: message,
+		Data: WechatLoginData{
+			Token:        token,
+			OpenID:       session.OpenID,
+			IsBound:      isBound,
+			SupplierInfo: json.RawMessage(supplierData),
+		},
+	})
+}
+
+// querySupplierByOpenID 调用内部系统 BC_Customer_GetByWeChat，返回原始 JSON
+func (h *Handler) querySupplierByOpenID(openid string) ([]byte, error) {
+	internalToken, err := h.getInternalToken()
+	if err != nil {
+		return nil, fmt.Errorf("获取内部 token 失败: %w", err)
+	}
+
+	requestBody := map[string]interface{}{
+		"code": "BC_Customer_GetByWeChat",
+		"pars": map[string]interface{}{
+			"Openid": openid,
+			"Type":   "1", // 1=小程序
+		},
+		"outPars": map[string]interface{}{},
+	}
+	bodyBytes, _ := json.Marshal(requestBody)
+
+	apiURL := strings.TrimRight(h.internalAPIURL, "/") + "/api/Public/GetProcedureDataSet"
+	fmt.Printf("[WECHAT-LOGIN] 查询供应商: URL=%s body=%s\n", apiURL, string(bodyBytes))
+
+	httpReq, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", internalToken)
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("请求内部系统失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	fmt.Printf("[WECHAT-LOGIN] 内部系统 HTTP %d, 响应: %s\n", resp.StatusCode, string(body))
+	return body, err
 }
