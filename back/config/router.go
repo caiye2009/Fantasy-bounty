@@ -3,8 +3,6 @@ package config
 import (
 	"back/internal/audit"
 	"back/internal/auth"
-	"back/internal/bid"
-	"back/internal/supplier"
 	"back/internal/user"
 	"back/pkg/crypto"
 	"back/pkg/internal_token"
@@ -57,92 +55,41 @@ func SetupRouter() (*gin.Engine, func()) {
 	auditService := audit.NewService(auditRepo)
 	auditService.Start()
 
-	// 初始化用户服务（需要先初始化，供 auth 使用）
+	// 初始化用户服务（供 auth 使用）
 	userRepo := user.NewRepository(DB)
 	userService := user.NewService(userRepo, cryptoService)
 
-	// 初始化内部系统 token 管理器（需要在 authHandler 之前初始化）
+	// 初始化内部系统 token 管理器
+	internalTokenLifetimeHours := getEnvInt("INTERNAL_TOKEN_LIFETIME_HOURS", 10)
 	tokenManager := internal_token.NewManager(
 		getEnv("INTERNAL_API_URL", ""),
 		getEnv("INTERNAL_AUTH_PATH", "/auth/login"),
 		getEnv("INTERNAL_USERNAME", ""),
 		getEnv("INTERNAL_PASSWORD", ""),
+		time.Duration(internalTokenLifetimeHours)*time.Hour,
 	)
-
-	// 启动时刷新一次 token，并开启后台自动刷新
 	tokenManager.Start()
 
-	// 初始化依赖
 	authHandler := auth.NewHandler(jwtService, userService, tokenManager.GetToken, getEnv("INTERNAL_API_URL", ""))
-
-	// 初始化供应商服务（需要在 bid 之前初始化）
-	supplierRepo := supplier.NewRepository(DB)
-	supplierService := supplier.NewService(supplierRepo)
-	supplierHandler := supplier.NewHandler(supplierService)
-
-	// 初始化竞标服务（需要供应商服务来校验认证状态）
-	bidRepo := bid.NewRepository(DB)
-	bidService := bid.NewService(bidRepo)
-	bidHandler := bid.NewHandler(bidService, supplierService)
-
-	// 初始化用户 handler（userService 已在上面初始化）
-	userHandler := user.NewHandler(userService)
-
-	// 初始化内部系统反向代理
 	internalProxy := proxy.NewInternalProxy(tokenManager, getEnv("INTERNAL_API_URL", ""), jwtService)
 
-	// API v1 路由组
 	v1 := router.Group("/api/v1")
+
+	// ========== PUBLIC：无需 JWT ==========
+	authGroup := v1.Group("/auth")
+	authGroup.Use(middleware.Audit(auditService))
 	{
-		// ========== 供应商认证路由 ==========
-		// 不需要JWT认证，但有审计
-		authGroup := v1.Group("/auth")
-		authGroup.Use(middleware.Audit(auditService))
-		{
-			authGroup.POST("/send-code", authHandler.SendCode)       // 发送验证码
-			authGroup.POST("/verify-code", authHandler.VerifyCode)   // 验证码登录/注册
-			authGroup.POST("/refresh", authHandler.RefreshToken)     // 刷新 token
-			authGroup.POST("/wechat-login", authHandler.WechatLogin) // 微信小程序登录
-		}
+		authGroup.POST("/wechat-login", authHandler.WechatLogin) // 微信登录，返回外部JWT
+		authGroup.POST("/refresh", authHandler.RefreshToken)     // 刷新外部JWT
+	}
 
-		// ========== 供应商业务路由 ==========
-		// TODO: 临时关闭JWT认证，前端直接调用调试
-		supplierGroup := v1.Group("/supplier")
-		// supplierGroup.Use(middleware.JWTAuth(jwtService))
-		supplierGroup.Use(middleware.Audit(auditService))
-		{
-			// Bid 路由
-			bids := supplierGroup.Group("/bids")
-			{
-				bids.POST("", bidHandler.CreateBid)       // 创建竞标（需要供应商认证）
-				bids.GET("", bidHandler.ListBids)         // 获取竞标列表
-				bids.GET("/my", bidHandler.ListMyBids)    // 获取我的竞标列表
-				bids.DELETE("/:id", bidHandler.DeleteBid) // 删除竞标
-			}
-
-			// Supplier 路由
-			suppliers := supplierGroup.Group("/suppliers")
-			{
-				suppliers.GET("", supplierHandler.ListSuppliers)
-				suppliers.GET("/:id", supplierHandler.GetSupplier)
-				suppliers.POST("/recognize", supplierHandler.RecognizeLicense) // 上传营业执照OCR识别
-				suppliers.POST("/apply", supplierHandler.ApplySupplier)        // 提交供应商认证申请
-				suppliers.GET("/my", supplierHandler.GetMySupplierStatus)      // 获取我的供应商认证状态
-			}
-
-			// User 路由
-			users := supplierGroup.Group("/users")
-			{
-				users.POST("", userHandler.CreateUser)
-				users.GET("", userHandler.ListUsers)
-				users.GET("/:id", userHandler.GetUser)
-				users.PUT("/:id", userHandler.UpdateUser)
-				users.DELETE("/:id", userHandler.DeleteUser)
-			}
-		}
-
-		// ========== 代理转发路由（无JWT） ==========
-		proxyGroup := v1.Group("/proxy")
+	// ========== EXTERNAL JWT：前端携带外部JWT ==========
+	protected := v1.Group("")
+	protected.Use(middleware.JWTAuth(jwtService))
+	protected.Use(middleware.Audit(auditService))
+	{
+		// 代理转发到内部系统（后端用内部token，前端无感知）
+		proxyGroup := protected.Group("/proxy")
 		{
 			proxyGroup.POST("/bind-wechat", internalProxy.BindWeChatHandler())
 			proxyGroup.POST("/get-by-wechat", internalProxy.GetByWeChatHandler())
@@ -150,33 +97,23 @@ func SetupRouter() (*gin.Engine, func()) {
 			proxyGroup.POST("/inquiry-detail", internalProxy.InquiryDetailHandler())
 			proxyGroup.POST("/quote-delete", internalProxy.QuoteDeleteHandler())
 			proxyGroup.POST("/quote-save", internalProxy.QuoteSaveHandler())
-			proxyGroup.POST("/refresh-token", internalProxy.ForceRefreshTokenHandler())
+			proxyGroup.POST("/inquiry-quoted", internalProxy.InquiryBySupplierQuotedHandler())
 		}
 
-		// ========== 内部系统路由 ==========
-		internalGroup := v1.Group("/internal")
-		internalGroup.Use(middleware.Audit(auditService))
+		// 悬赏列表
+		internalGroup := protected.Group("/internal")
 		{
-			// 内部用户登录（不需要JWT）
-			internalGroup.POST("/login", authHandler.InternalLogin)
-
-			// ========== 外部用户访问的路径（供应商） ==========
-			// 需要验证外部JWT，通过后转换成内部token访问老系统
-			// 使用专门的 BountiesHandler（通用 Handler 依赖 *path 参数，这里不适用）
-			// TODO: 临时关闭JWT认证，前端直接调用调试
 			internalGroup.GET("/bounties", internalProxy.BountiesHandler())
 			internalGroup.GET("/bounties/:id", internalProxy.BountiesHandler())
-
-			// TODO: 在这里添加其他外部用户可以访问的路径
-			// internalGroup.GET("/search", middleware.JWTAuth(jwtService), internalProxy.Handler())
-
-			// ========== 内部用户访问的路径（员工） ==========
-			// 直接透传Authorization header到老系统，不做JWT验证
-			// 注意：由于 Gin 不允许通配符和具体路径混用，
-			// 需要为内部用户明确添加需要的路由，或者在这里使用 NoRoute
-			// 暂时注释掉通配符路由，避免冲突
-			// internalGroup.Any("/*path", internalProxy.Handler())
 		}
+	}
+
+	// ========== ADMIN：管理接口，不走外部JWT ==========
+	adminGroup := v1.Group("")
+	adminGroup.Use(middleware.Audit(auditService))
+	{
+		adminGroup.POST("/internal/login", authHandler.InternalLogin)          // 内部系统登录代理
+		adminGroup.POST("/proxy/refresh-token", internalProxy.ForceRefreshTokenHandler()) // 强制刷新内部token
 	}
 
 	// 静态文件服务 - 营业执照图片
@@ -187,9 +124,7 @@ func SetupRouter() (*gin.Engine, func()) {
 
 	// 健康检查
 	router.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status": "ok",
-		})
+		c.JSON(200, gin.H{"status": "ok"})
 	})
 
 	cleanup := func() {

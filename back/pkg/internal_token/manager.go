@@ -9,80 +9,99 @@ import (
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
 // Manager 内部系统 Token 管理器
-// 负责从内部系统获取 JWT token，缓存并在过期前自动刷新
+// 负责从内部系统获取 token，并按固定周期（tokenLifetime - 30min）自动刷新
 type Manager struct {
-	mu        sync.RWMutex
-	token     string
-	expiresAt time.Time
+	mu           sync.RWMutex
+	token        string
+	expiresAt    time.Time
+	refreshTimer *time.Timer
 
-	apiURL   string // 内部系统基础 URL
-	authPath string // 内部系统登录路径
-	username string // 内部系统用户名
-	password string // 内部系统密码
+	apiURL        string        // 内部系统基础 URL
+	authPath      string        // 内部系统登录路径
+	username      string        // 内部系统用户名
+	password      string        // 内部系统密码
+	tokenLifetime time.Duration // 内部 token 有效期（用于计算刷新周期）
 
 	httpClient *http.Client
 }
 
-// refreshThreshold 距离过期小于此时间时触发刷新（提前30分钟）
-const refreshThreshold = 30 * time.Minute
-
 // NewManager 创建内部 Token 管理器
-func NewManager(apiURL, authPath, username, password string) *Manager {
+// tokenLifetime: 内部系统 token 有效期，刷新将在到期前 30 分钟触发
+func NewManager(apiURL, authPath, username, password string, tokenLifetime time.Duration) *Manager {
 	return &Manager{
-		apiURL:   apiURL,
-		authPath: authPath,
-		username: username,
-		password: password,
+		apiURL:        apiURL,
+		authPath:      authPath,
+		username:      username,
+		password:      password,
+		tokenLifetime: tokenLifetime,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 	}
 }
 
-// Start 启动时立即刷新一次 token，并开启后台每5分钟检查
+// refreshInterval 刷新周期 = tokenLifetime - 30min
+func (m *Manager) refreshInterval() time.Duration {
+	d := m.tokenLifetime - 30*time.Minute
+	if d <= 0 {
+		d = m.tokenLifetime
+	}
+	return d
+}
+
+// Start 启动时立即刷新一次，之后按固定周期自动刷新
 func (m *Manager) Start() {
-	log.Printf("[TOKEN-MGR] 启动初始化: 执行首次token刷新...")
+	log.Printf("[TOKEN-MGR] 启动初始化: token有效期=%v, 刷新周期=%v",
+		m.tokenLifetime, m.refreshInterval())
+
 	m.mu.Lock()
 	if err := m.refreshWithRetry(); err != nil {
 		log.Printf("[TOKEN-MGR] 启动初始刷新失败: %v", err)
 	}
+	m.scheduleNextRefresh()
 	m.mu.Unlock()
-
-	go func() {
-		ticker := time.NewTicker(5 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
-			m.mu.RLock()
-			needRefresh := m.token == "" || time.Until(m.expiresAt) <= refreshThreshold
-			remaining := time.Until(m.expiresAt).Round(time.Minute)
-			m.mu.RUnlock()
-
-			if needRefresh {
-				m.mu.Lock()
-				// double-check
-				if m.token == "" || time.Until(m.expiresAt) <= refreshThreshold {
-					log.Printf("[TOKEN-MGR] 后台检测: token剩余有效期 %v，触发刷新...", remaining)
-					if err := m.refreshWithRetry(); err != nil {
-						log.Printf("[TOKEN-MGR] 后台刷新失败: %v", err)
-					}
-				}
-				m.mu.Unlock()
-			}
-		}
-	}()
 }
 
-// ForceRefresh 手动强制刷新 token（不管当前是否即将过期）
+// scheduleNextRefresh 按固定刷新周期调度下次刷新（调用时须持有写锁）
+func (m *Manager) scheduleNextRefresh() {
+	if m.refreshTimer != nil {
+		m.refreshTimer.Stop()
+	}
+	interval := m.refreshInterval()
+	log.Printf("[TOKEN-MGR] 下次刷新: %v 后", interval.Round(time.Minute))
+	m.refreshTimer = time.AfterFunc(interval, m.timedRefresh)
+}
+
+// timedRefresh 定时触发的刷新
+func (m *Manager) timedRefresh() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	log.Printf("[TOKEN-MGR] 定时触发: 执行内部token刷新...")
+	if err := m.refreshWithRetry(); err != nil {
+		log.Printf("[TOKEN-MGR] 定时刷新失败: %v，5分钟后重试", err)
+		if m.refreshTimer != nil {
+			m.refreshTimer.Stop()
+		}
+		m.refreshTimer = time.AfterFunc(5*time.Minute, m.timedRefresh)
+		return
+	}
+	m.scheduleNextRefresh()
+}
+
+// ForceRefresh 手动强制刷新 token，并重置定时周期
 func (m *Manager) ForceRefresh() error {
 	log.Printf("[TOKEN-MGR] 手动强制刷新token")
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.refreshWithRetry()
+	err := m.refreshWithRetry()
+	if err == nil {
+		m.scheduleNextRefresh()
+	}
+	return err
 }
 
 // ExpiresAt 返回当前 token 的过期时间
@@ -92,39 +111,30 @@ func (m *Manager) ExpiresAt() time.Time {
 	return m.expiresAt
 }
 
-// GetToken 获取内部系统 token，必要时自动刷新
+// GetToken 返回当前内部 token；仅当 token 已过期时才做兜底刷新
 func (m *Manager) GetToken() (string, error) {
-	// 1. 读锁快速检查
 	m.mu.RLock()
 	token := m.token
 	expiresAt := m.expiresAt
 	m.mu.RUnlock()
 
-	if token != "" && time.Until(expiresAt) > refreshThreshold {
+	if token != "" && time.Now().Before(expiresAt) {
 		return token, nil
 	}
 
-	// 2. 需要刷新，升级为写锁
+	// 兜底：定时器未能及时触发，立即刷新
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Double-check：其他 goroutine 可能已经刷新
-	if m.token != "" && time.Until(m.expiresAt) > refreshThreshold {
+	if m.token != "" && time.Now().Before(m.expiresAt) {
 		return m.token, nil
 	}
 
-	oldToken := m.token
-	oldExpiresAt := m.expiresAt
-
+	log.Printf("[TOKEN-MGR] GetToken: token已过期，立即刷新...")
 	if err := m.refreshWithRetry(); err != nil {
-		// 刷新失败，旧 token 还没真正过期则继续使用
-		if oldToken != "" && time.Now().Before(oldExpiresAt) {
-			log.Printf("[TOKEN-MGR] 刷新失败，继续使用旧token(剩余: %v)", time.Until(oldExpiresAt).Round(time.Minute))
-			return oldToken, nil
-		}
 		return "", fmt.Errorf("获取内部系统 token 失败: %w", err)
 	}
-
+	m.scheduleNextRefresh()
 	return m.token, nil
 }
 
@@ -215,50 +225,13 @@ func (m *Manager) refreshToken() error {
 		return fmt.Errorf("登录响应中未包含 token")
 	}
 
-	// 解析 JWT 获取过期时间
-	expiresAt, err := parseJWTExpiry(result.Data.Token)
-	if err != nil {
-		log.Printf("[TOKEN-MGR]   无法解析JWT过期时间: %v, 使用默认10h", err)
-		expiresAt = time.Now().Add(10 * time.Hour)
-	}
-
+	now := time.Now()
 	m.token = result.Data.Token
-	m.expiresAt = expiresAt
+	m.expiresAt = now.Add(m.tokenLifetime)
 
-	log.Printf("[TOKEN-MGR] token刷新成功, 过期时间: %v (剩余: %v)",
-		expiresAt.Format(time.RFC3339),
-		time.Until(expiresAt).Round(time.Minute),
+	log.Printf("[TOKEN-MGR] token刷新成功, 下次刷新: %v 后 (预计到期: %s)",
+		m.refreshInterval().Round(time.Minute),
+		m.expiresAt.Format("2006-01-02 15:04:05"),
 	)
 	return nil
-}
-
-// parseJWTExpiry 从 JWT token 中解析过期时间（不验证签名）
-// 兼容标准 exp 字段和内部系统自定义的 Expire 字段
-func parseJWTExpiry(tokenString string) (time.Time, error) {
-	parser := jwt.NewParser(jwt.WithoutClaimsValidation())
-	mapClaims := jwt.MapClaims{}
-
-	_, _, err := parser.ParseUnverified(tokenString, mapClaims)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("解析 JWT 失败: %w", err)
-	}
-
-	// 优先尝试标准 exp 字段（Unix 时间戳）
-	if exp, ok := mapClaims["exp"]; ok {
-		if v, ok := exp.(float64); ok {
-			return time.Unix(int64(v), 0), nil
-		}
-	}
-
-	// 兼容内部系统自定义的 Expire 字段（RFC3339 字符串）
-	if expireStr, ok := mapClaims["Expire"].(string); ok && expireStr != "" {
-		if t, err := time.Parse(time.RFC3339Nano, expireStr); err == nil {
-			return t, nil
-		}
-		if t, err := time.Parse(time.RFC3339, expireStr); err == nil {
-			return t, nil
-		}
-	}
-
-	return time.Time{}, fmt.Errorf("JWT 中未包含有效的过期时间字段(exp/Expire)")
 }

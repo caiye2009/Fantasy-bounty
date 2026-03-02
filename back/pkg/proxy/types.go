@@ -128,7 +128,24 @@ type QuoteDeleteResponse struct {
 }
 
 // =============================================================================
-// 6. 供应商报价保存
+// 6. 查询供应商已报价的采购单
+// =============================================================================
+
+type InquiryBySupplierQuotedRequest struct {
+	Supplier string `json:"Supplier" example:"C001"`
+}
+
+type InquiryBySupplierQuotedResponse struct {
+	IsSucceed  bool        `json:"isSucceed"`
+	Message    *string     `json:"message"`
+	Time       int         `json:"time"`
+	StatusCode int         `json:"statusCode"`
+	Data       interface{} `json:"data"`
+	OutData    interface{} `json:"outData"`
+}
+
+// =============================================================================
+// 7. 供应商报价保存
 // =============================================================================
 
 type QuoteSaveRequest struct {

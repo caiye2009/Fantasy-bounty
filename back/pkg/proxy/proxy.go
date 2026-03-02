@@ -207,6 +207,27 @@ func (p *InternalProxy) QuoteDeleteHandler() gin.HandlerFunc {
 	}
 }
 
+// InquiryBySupplierQuotedHandler godoc
+// @Summary      查询供应商已报价的采购单
+// @Description  返回该供应商已提交过报价的询价单列表
+// @Tags         proxy
+// @Accept       json
+// @Produce      json
+// @Param        request  body      InquiryBySupplierQuotedRequest  true  "查询参数"
+// @Success      200      {object}  InquiryBySupplierQuotedResponse
+// @Failure      400      {object}  BaseResponse
+// @Router       /proxy/inquiry-quoted [post]
+func (p *InternalProxy) InquiryBySupplierQuotedHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var body map[string]interface{}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "请求参数错误"})
+			return
+		}
+		p.forwardToInternal(c, "Pur_InquiryBySupplierQuoted", body, map[string]interface{}{})
+	}
+}
+
 // QuoteSaveHandler godoc
 // @Summary      供应商提交或保存报价
 // @Tags         proxy
