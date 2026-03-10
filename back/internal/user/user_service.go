@@ -37,6 +37,7 @@ type Service interface {
 	GetUser(ctx context.Context, id string) (*User, error)
 	GetUserByUsername(ctx context.Context, username string) (*User, error)
 	GetUserByPhone(ctx context.Context, phone string) (*User, error)
+	GetUserByOpenID(ctx context.Context, openid string) (*User, error)
 	UpdateUser(ctx context.Context, id string, req *UpdateUserRequest) (*User, error)
 	DeleteUser(ctx context.Context, id string) error
 	ListUsers(ctx context.Context, page, pageSize int) ([]User, int64, error)
@@ -67,17 +68,25 @@ func (s *service) decryptUser(u *User) error {
 }
 
 func (s *service) CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) {
-	// 加密手机号
-	phoneEncrypted, err := s.crypto.Encrypt(req.Phone)
-	if err != nil {
-		return nil, errors.New("手机号加密失败: " + err.Error())
+	user := &User{
+		Username:     generateUsername(),
+		OpenID:       req.OpenID,
+		UnionID:      req.UnionID,
+		Mobile:       req.Mobile,
+		CustomerCode: req.CustomerCode,
+		Status:       "active",
 	}
 
-	user := &User{
-		Username:       generateUsername(),
-		PhoneHash:      s.crypto.Hash(req.Phone),
-		PhoneEncrypted: phoneEncrypted,
-		Status:         "active",
+	// 如果有手机号，则加密处理
+	if req.Phone != "" {
+		phoneEncrypted, err := s.crypto.Encrypt(req.Phone)
+		if err != nil {
+			return nil, errors.New("手机号加密失败: " + err.Error())
+		}
+		user.PhoneHash = s.crypto.Hash(req.Phone)
+		user.PhoneEncrypted = phoneEncrypted
+		user.Phone = req.Phone
+		user.PhoneMasked = crypto.MaskPhone(req.Phone)
 	}
 
 	// 尝试创建，仅在用户名唯一冲突时重试1次
@@ -95,10 +104,6 @@ func (s *service) CreateUser(ctx context.Context, req *CreateUserRequest) (*User
 			return nil, createErr
 		}
 	}
-
-	// 填充解密后的手机号用于返回
-	user.Phone = req.Phone
-	user.PhoneMasked = crypto.MaskPhone(req.Phone)
 
 	return user, nil
 }
@@ -141,6 +146,23 @@ func (s *service) GetUserByPhone(ctx context.Context, phone string) (*User, erro
 	// 通过手机号哈希查询
 	phoneHash := s.crypto.Hash(phone)
 	user, err := s.repo.GetByPhoneHash(ctx, phoneHash)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not found")
+		}
+		return nil, err
+	}
+
+	// 解密手机号
+	if err := s.decryptUser(user); err != nil {
+		return nil, errors.New("手机号解密失败: " + err.Error())
+	}
+
+	return user, nil
+}
+
+func (s *service) GetUserByOpenID(ctx context.Context, openid string) (*User, error) {
+	user, err := s.repo.GetByOpenID(ctx, openid)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("user not found")

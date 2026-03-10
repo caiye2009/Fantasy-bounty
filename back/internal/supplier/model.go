@@ -3,128 +3,83 @@ package supplier
 import (
 	"time"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
 
-// 供应商认证申请状态
-const (
-	ApplicationStatusPending  = "pending"  // 待审核
-	ApplicationStatusApproved = "approved" // 已通过
-	ApplicationStatusRejected = "rejected" // 已拒绝
-)
-
-// Supplier 供应商表（只存已通过审核的供应商）
-type Supplier struct {
-	ID                   string         `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	Name                 string         `json:"name" gorm:"type:varchar(255);not null"`
-	BusinessLicenseNo    string         `json:"businessLicenseNo" gorm:"type:varchar(100);not null"`
-	BusinessLicenseImage string         `json:"businessLicenseImage" gorm:"type:varchar(500);not null"`
-	VerifiedAt           time.Time      `json:"verifiedAt"`
-	CreatedAt            time.Time      `json:"createdAt" gorm:"autoCreateTime"`
-	UpdatedAt            time.Time      `json:"updatedAt" gorm:"autoUpdateTime"`
-	DeletedAt            gorm.DeletedAt `json:"-" gorm:"index"`
+// SupplierProfile 供应商档案
+type SupplierProfile struct {
+	ID           string         `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID       string         `json:"userId" gorm:"type:uuid;not null;uniqueIndex"` // 关联用户，唯一索引
+	CompanyType  string         `json:"companyType" gorm:"type:varchar(50)"`          // 企业类型
+	CompanyName  string         `json:"companyName" gorm:"type:varchar(255)"`         // 企业名称
+	Capabilities datatypes.JSON `json:"capabilities" gorm:"type:jsonb"`                // 机器能力 {a:1, b:2}
+	CreatedAt    time.Time      `json:"createdAt" gorm:"autoCreateTime"`
+	UpdatedAt    time.Time      `json:"updatedAt" gorm:"autoUpdateTime"`
+	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
-func (Supplier) TableName() string {
-	return "suppliers"
-}
-
-// UserSupplier 用户-供应商绑定表
-type UserSupplier struct {
-	ID         string         `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	Username   string         `json:"username" gorm:"type:varchar(20);not null;uniqueIndex"`
-	SupplierID string         `json:"supplierId" gorm:"type:uuid;not null"`
-	CreatedAt  time.Time      `json:"createdAt" gorm:"autoCreateTime"`
-	UpdatedAt  time.Time      `json:"updatedAt" gorm:"autoUpdateTime"`
-	DeletedAt  gorm.DeletedAt `json:"-" gorm:"index"`
-}
-
-func (UserSupplier) TableName() string {
-	return "user_suppliers"
-}
-
-// SupplierApplication 供应商认证申请表
-type SupplierApplication struct {
-	ID                   string         `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	Username             string         `json:"username" gorm:"type:varchar(20);not null;index"`
-	Name                 string         `json:"name" gorm:"type:varchar(255);not null"`
-	BusinessLicenseNo    string         `json:"businessLicenseNo" gorm:"type:varchar(100);not null"`
-	BusinessLicenseImage string         `json:"businessLicenseImage" gorm:"type:varchar(500);not null"`
-	Status               string         `json:"status" gorm:"type:varchar(20);not null;default:'pending'"`
-	RejectReason         *string        `json:"rejectReason" gorm:"type:varchar(500)"`
-	ReviewedAt           *time.Time     `json:"reviewedAt"`
-	CreatedAt            time.Time      `json:"createdAt" gorm:"autoCreateTime"`
-	UpdatedAt            time.Time      `json:"updatedAt" gorm:"autoUpdateTime"`
-	DeletedAt            gorm.DeletedAt `json:"-" gorm:"index"`
-}
-
-func (SupplierApplication) TableName() string {
-	return "supplier_applications"
+func (SupplierProfile) TableName() string {
+	return "supplier_profiles"
 }
 
 // ========== Request ==========
 
-// ApplySupplierRequest 供应商认证申请请求
-type ApplySupplierRequest struct {
-	Name              string `json:"name" binding:"required"`
-	BusinessLicenseNo string `json:"businessLicenseNo" binding:"required"`
+// CreateSupplierRequest 创建/更新供应商请求
+type CreateSupplierRequest struct {
+	UserID       string         `json:"-"` // 从上下文中获取，不从前端传递
+	CompanyType  string         `json:"companyType" binding:"required"`
+	CompanyName  string         `json:"companyName" binding:"required"`
+	Capabilities map[string]int `json:"capabilities"` // 机器能力 {a:1, b:2}
 }
 
-// ========== OCR ==========
-
-// OCRResult 营业执照OCR识别结果
-type OCRResult struct {
-	CompanyName       string `json:"companyName"`
-	BusinessLicenseNo string `json:"businessLicenseNo"`
-	LegalPerson       string `json:"legalPerson"`
-	RegisteredCapital string `json:"registeredCapital"`
-	EstablishDate     string `json:"establishDate"`
-	BusinessScope     string `json:"businessScope"`
-	Address           string `json:"address"`
-}
-
-// OCRResponse OCR识别响应
-type OCRResponse struct {
-	Code    int        `json:"code"`
-	Message string     `json:"message"`
-	Data    *OCRResult `json:"data,omitempty"`
+// UpdateCapabilitiesRequest 更新机器能力请求
+type UpdateCapabilitiesRequest struct {
+	Capabilities map[string]int `json:"capabilities" binding:"required"`
 }
 
 // ========== Response ==========
 
-// SupplierResponse 单个供应商响应
-type SupplierResponse struct {
-	Code    int       `json:"code"`
-	Message string    `json:"message"`
-	Data    *Supplier `json:"data,omitempty"`
+// SupplierProfileResponse 供应商档案响应
+type SupplierProfileResponse struct {
+	Code    int              `json:"code"`
+	Message string           `json:"message"`
+	Data    *SupplierProfile `json:"data,omitempty"`
 }
 
-// SupplierListResponse 供应商列表响应
-type SupplierListResponse struct {
-	Code    int        `json:"code"`
-	Message string     `json:"message"`
-	Data    []Supplier `json:"data"`
-	Total   int64      `json:"total"`
-}
-
-// ApplicationResponse 申请响应
-type ApplicationResponse struct {
-	Code    int                  `json:"code"`
-	Message string               `json:"message"`
-	Data    *SupplierApplication `json:"data,omitempty"`
-}
-
-// MySupplierStatusResponse 我的供应商认证状态响应
-type MySupplierStatusResponse struct {
+// CapabilitiesResponse 机器能力响应
+type CapabilitiesResponse struct {
 	Code    int               `json:"code"`
 	Message string            `json:"message"`
-	Data    *MySupplierStatus `json:"data,omitempty"`
+	Data    map[string]int    `json:"data,omitempty"`
 }
 
-// MySupplierStatus 我的供应商认证状态
-type MySupplierStatus struct {
-	HasVerifiedSupplier bool                 `json:"hasVerifiedSupplier"`
-	Supplier            *Supplier            `json:"supplier,omitempty"`
-	PendingApplication  *SupplierApplication `json:"pendingApplication,omitempty"`
-	LatestRejected      *SupplierApplication `json:"latestRejected,omitempty"`
+// SupplierFullInfoResponse 供应商完整信息响应
+type SupplierFullInfoResponse struct {
+	Code    int                 `json:"code"`
+	Message string              `json:"message"`
+	Data    *SupplierFullInfo  `json:"data,omitempty"`
+}
+
+// SupplierFullInfo 供应商完整信息
+type SupplierFullInfo struct {
+	Info          *SupplierInfo      `json:"info"`           // 企业信息
+	Qualification *SupplierQualification `json:"qualification"` // 资质信息
+	Capabilities  map[string]int    `json:"capabilities"`  // 生产能力
+}
+
+// SupplierInfo 企业基本信息
+type SupplierInfo struct {
+	ID          string `json:"id"`
+	UserID      string `json:"userId"`
+	CompanyType string `json:"companyType"`
+	CompanyName string `json:"companyName"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+}
+
+// SupplierQualification 供应商资质信息
+type SupplierQualification struct {
+	// 可以在这里添加资质相关字段，目前暂时为空
+	// 例如：营业执照、生产许可证等
 }

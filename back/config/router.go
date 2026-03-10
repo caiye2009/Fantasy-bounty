@@ -3,12 +3,13 @@ package config
 import (
 	"back/internal/audit"
 	"back/internal/auth"
+	"back/internal/proxy"
+	"back/internal/supplier"
 	"back/internal/user"
 	"back/pkg/crypto"
 	"back/pkg/internal_token"
 	"back/pkg/jwt"
 	"back/pkg/middleware"
-	"back/pkg/proxy"
 	"log"
 	"os"
 	"strconv"
@@ -59,6 +60,10 @@ func SetupRouter() (*gin.Engine, func()) {
 	userRepo := user.NewRepository(DB)
 	userService := user.NewService(userRepo, cryptoService)
 
+	// 初始化供应商服务
+	supplierRepo := supplier.NewRepository(DB)
+	supplierService := supplier.NewService(supplierRepo)
+
 	// 初始化内部系统 token 管理器
 	internalTokenLifetimeHours := getEnvInt("INTERNAL_TOKEN_LIFETIME_HOURS", 10)
 	tokenManager := internal_token.NewManager(
@@ -71,6 +76,7 @@ func SetupRouter() (*gin.Engine, func()) {
 	tokenManager.Start()
 
 	authHandler := auth.NewHandler(jwtService, userService, tokenManager.GetToken, getEnv("INTERNAL_API_URL", ""))
+	supplierHandler := supplier.NewHandler(supplierService, userService)
 	internalProxy := proxy.NewInternalProxy(tokenManager, getEnv("INTERNAL_API_URL", ""), jwtService)
 
 	v1 := router.Group("/api/v1")
@@ -100,11 +106,13 @@ func SetupRouter() (*gin.Engine, func()) {
 			proxyGroup.POST("/inquiry-quoted", internalProxy.InquiryBySupplierQuotedHandler())
 		}
 
-		// 悬赏列表
-		internalGroup := protected.Group("/internal")
+		// 供应商管理
+		supplierGroup := protected.Group("/supplier")
 		{
-			internalGroup.GET("/bounties", internalProxy.BountiesHandler())
-			internalGroup.GET("/bounties/:id", internalProxy.BountiesHandler())
+			supplierGroup.POST("/profile", supplierHandler.CreateOrUpdateProfile)     // 创建/更新供应商档案
+			supplierGroup.GET("/profile", supplierHandler.GetProfile)                 // 获取供应商档案
+			supplierGroup.GET("/full-info", supplierHandler.GetFullInfo)             // 获取供应商完整信息
+			supplierGroup.POST("/capabilities", supplierHandler.UpdateCapabilities)   // 更新机器能力
 		}
 	}
 

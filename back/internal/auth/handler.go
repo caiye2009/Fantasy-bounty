@@ -506,11 +506,53 @@ func (h *Handler) WechatLogin(c *gin.Context) {
 	isBound := internalResp.IsSucceed && len(internalResp.Data) > 0
 	fmt.Printf("[WECHAT-LOGIN] isBound=%v isSucceed=%v dataLen=%d\n", isBound, internalResp.IsSucceed, len(internalResp.Data))
 
+	// Step 2.5: 自动注册用户（隐藏注册）
+	ctx := context.Background()
+	var mobile, customerCode string
+	
+	// 解析供应商信息（如果绑定）
+	if isBound && len(internalResp.Data) > 0 {
+		var supplier struct {
+			Mobile       string `json:"Mobile"`
+			CustomerCode string `json:"CustomerCode"`
+		}
+		if err := json.Unmarshal(internalResp.Data[0], &supplier); err == nil {
+			mobile = supplier.Mobile
+			customerCode = supplier.CustomerCode
+			fmt.Printf("[WECHAT-LOGIN] 解析供应商信息: mobile=%s, customerCode=%s\n", mobile, customerCode)
+		}
+	}
+
+	// 查询用户是否存在
+	u, err := h.userService.GetUserByOpenID(ctx, session.OpenID)
+	if err != nil {
+		// 用户不存在，自动创建
+		fmt.Printf("[WECHAT-LOGIN] 用户不存在，自动创建: openid=%s\n", session.OpenID)
+		u, err = h.userService.CreateUser(ctx, &user.CreateUserRequest{
+			OpenID:      session.OpenID,
+			UnionID:     session.UnionID,
+			Mobile:      mobile,
+			CustomerCode: customerCode,
+		})
+		if err != nil {
+			fmt.Printf("[WECHAT-LOGIN] 创建用户失败: %v\n", err)
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Code:    http.StatusInternalServerError,
+				Message: "创建用户失败: " + err.Error(),
+			})
+			return
+		}
+	} else {
+		// 用户存在，更新最后登录时间
+		fmt.Printf("[WECHAT-LOGIN] 用户已存在，更新登录时间: username=%s\n", u.Username)
+		_ = h.userService.UpdateLastLogin(ctx, u.ID)
+	}
+
 	// 将 data 序列化为 JSON（未绑定时为空数组 []）
 	supplierData, _ := json.Marshal(internalResp.Data)
 
-	// Step 3: 生成 JWT（以 openid 作为标识）
-	token, err := h.jwtService.GenerateToken(session.OpenID)
+	// Step 3: 生成 JWT（以 username 作为标识）
+	token, err := h.jwtService.GenerateToken(u.Username)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,
@@ -528,9 +570,10 @@ func (h *Handler) WechatLogin(c *gin.Context) {
 	if rc := middleware.GetRequestContext(c); rc != nil {
 		rc.Action = "auth.wechat_login"
 		rc.Resource = "auth"
-		rc.Username = session.OpenID
+		rc.Username = u.Username
 		rc.Detail = map[string]any{
 			"openid":   session.OpenID,
+			"username": u.Username,
 			"is_bound": isBound,
 		}
 	}

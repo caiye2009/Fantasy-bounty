@@ -2,7 +2,6 @@ package config
 
 import (
 	"back/internal/audit"
-	"back/internal/bid"
 	"back/internal/supplier"
 	"back/internal/user"
 	"fmt"
@@ -47,13 +46,8 @@ func InitDatabase() error {
 
 	// 自动迁移数据库表
 	if err := DB.AutoMigrate(
-		&bid.Bid{},
-		&bid.BidWovenSpec{},
-		&bid.BidKnittedSpec{},
 		&user.User{},
-		&supplier.Supplier{},
-		&supplier.UserSupplier{},
-		&supplier.SupplierApplication{},
+		&supplier.SupplierProfile{},
 		&audit.AuditLog{},
 	); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)

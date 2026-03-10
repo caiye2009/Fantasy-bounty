@@ -12,6 +12,7 @@ type Repository interface {
 	GetByID(ctx context.Context, id string) (*User, error)
 	GetByUsername(ctx context.Context, username string) (*User, error)
 	GetByPhoneHash(ctx context.Context, phoneHash string) (*User, error)
+	GetByOpenID(ctx context.Context, openid string) (*User, error)
 	Update(ctx context.Context, user *User) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, offset, limit int) ([]User, int64, error)
@@ -51,6 +52,15 @@ func (r *repository) GetByUsername(ctx context.Context, username string) (*User,
 func (r *repository) GetByPhoneHash(ctx context.Context, phoneHash string) (*User, error) {
 	var user User
 	err := r.db.WithContext(ctx).First(&user, "phone_hash = ?", phoneHash).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *repository) GetByOpenID(ctx context.Context, openid string) (*User, error) {
+	var user User
+	err := r.db.WithContext(ctx).First(&user, "open_id = ?", openid).Error
 	if err != nil {
 		return nil, err
 	}
