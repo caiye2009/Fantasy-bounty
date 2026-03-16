@@ -1,21 +1,41 @@
 basePath: /api/v1
 definitions:
+  auth.DemoLoginRequest:
+    properties:
+      phone:
+        type: string
+      role:
+        enum:
+        - supplier
+        - client
+        type: string
+    required:
+    - phone
+    - role
+    type: object
+  auth.DemoLoginResponse:
+    properties:
+      code:
+        type: integer
+      isNew:
+        type: boolean
+      message:
+        type: string
+      role:
+        type: string
+      token:
+        type: string
+      userId:
+        type: string
+      username:
+        type: string
+    type: object
   auth.ErrorResponse:
     properties:
       code:
         type: integer
       message:
         type: string
-    type: object
-  auth.InternalLoginRequest:
-    properties:
-      password:
-        type: string
-      username:
-        type: string
-    required:
-    - password
-    - username
     type: object
   auth.SendCodeRequest:
     properties:
@@ -55,133 +75,81 @@ definitions:
       username:
         type: string
     type: object
-  bid.Bid:
+  auth.WechatLoginData:
     properties:
-      bidPrice:
-        description: 投标价格
-        type: number
-      bountyId:
+      isBound:
+        type: boolean
+      openId:
+        type: string
+      supplierInfo:
+        description: 内部系统 BC_Customer_GetByWeChat 返回的 data 数组，未绑定时为 []
+      token:
+        type: string
+    type: object
+  auth.WechatLoginRequest:
+    properties:
+      code:
+        type: string
+      userInfo: {}
+    required:
+    - code
+    type: object
+  auth.WechatLoginResponse:
+    properties:
+      code:
         type: integer
+      data:
+        $ref: '#/definitions/auth.WechatLoginData'
+      message:
+        type: string
+    type: object
+  client.ClientProfile:
+    properties:
+      address:
+        type: string
+      companyName:
+        type: string
+      contactName:
+        type: string
       createdAt:
         type: string
       id:
+        description: equals users.id
         type: string
-      knittedSpec:
-        $ref: '#/definitions/bid.BidKnittedSpec'
-      status:
-        description: pending, in_progress, pending_acceptance, completed
+      industry:
         type: string
       updatedAt:
         type: string
-      username:
-        description: 关联用户名
+      userId:
+        description: equals ID, kept for clarity
         type: string
-      wovenSpec:
-        allOf:
-        - $ref: '#/definitions/bid.BidWovenSpec'
-        description: 关联规格 - 根据悬赏类型只会有一个有值
     type: object
-  bid.BidKnittedSpec:
-    properties:
-      bidId:
-        type: string
-      deliveryMethod:
-        description: 交货方式
-        type: string
-      greigeDeliveryDate:
-        description: 胚布交期
-        type: string
-      greigeFabricType:
-        description: 胚布类型（现货/定织）
-        type: string
-      id:
-        type: integer
-      sizeWeight:
-        description: 尺码（重量/皮重）
-        type: number
-    type: object
-  bid.BidListResponse:
+  client.ClientProfileResponse:
     properties:
       code:
         type: integer
       data:
-        items:
-          $ref: '#/definitions/bid.Bid'
-        type: array
-      message:
-        type: string
-      total:
-        type: integer
-    type: object
-  bid.BidResponse:
-    properties:
-      code:
-        type: integer
-      data:
-        $ref: '#/definitions/bid.Bid'
+        $ref: '#/definitions/client.ClientProfile'
       message:
         type: string
     type: object
-  bid.BidWovenSpec:
+  client.CreateClientProfileRequest:
     properties:
-      bidId:
+      address:
         type: string
-      deliveryMethod:
-        description: 交货方式
+      companyName:
         type: string
-      greigeDeliveryDate:
-        description: 胚布交期
+      contactName:
         type: string
-      greigeFabricType:
-        description: 胚布类型（现货/定织）
+      industry:
         type: string
-      id:
-        type: integer
-      sizeLength:
-        description: 尺码（长度）
-        type: number
-    type: object
-  bid.CreateBidKnittedSpecRequest:
-    properties:
-      deliveryMethod:
-        description: 竞标确认后 / 签订合同后 / 收到预付款后
-        type: string
-      greigeDeliveryDate:
-        type: string
-      greigeFabricType:
-        description: 现货 / 定织
-        type: string
-      sizeWeight:
-        type: number
-    type: object
-  bid.CreateBidRequest:
-    properties:
-      bidPrice:
-        type: number
-      bountyId:
-        type: integer
-      knittedSpec:
-        $ref: '#/definitions/bid.CreateBidKnittedSpecRequest'
-      wovenSpec:
-        $ref: '#/definitions/bid.CreateBidWovenSpecRequest'
     required:
-    - bidPrice
-    - bountyId
+    - address
+    - companyName
+    - contactName
+    - industry
     type: object
-  bid.CreateBidWovenSpecRequest:
-    properties:
-      deliveryMethod:
-        description: 竞标确认后 / 签订合同后 / 收到预付款后
-        type: string
-      greigeDeliveryDate:
-        type: string
-      greigeFabricType:
-        description: 现货 / 定织
-        type: string
-      sizeLength:
-        type: number
-    type: object
-  bid.ErrorResponse:
+  client.ErrorResponse:
     properties:
       code:
         type: integer
@@ -264,6 +232,25 @@ definitions:
         type: string
       outData:
         $ref: '#/definitions/proxy.GetByWeChatOutData'
+      statusCode:
+        type: integer
+      time:
+        type: integer
+    type: object
+  proxy.InquiryBySupplierQuotedRequest:
+    properties:
+      Supplier:
+        example: C001
+        type: string
+    type: object
+  proxy.InquiryBySupplierQuotedResponse:
+    properties:
+      data: {}
+      isSucceed:
+        type: boolean
+      message:
+        type: string
+      outData: {}
       statusCode:
         type: integer
       time:
@@ -439,12 +426,158 @@ definitions:
       time:
         type: integer
     type: object
+  supplier.CapabilitiesResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        additionalProperties:
+          type: integer
+        type: object
+      message:
+        type: string
+    type: object
+  supplier.CreateSupplierRequest:
+    properties:
+      capabilities:
+        additionalProperties:
+          type: integer
+        description: 机器能力 {a:1, b:2}
+        type: object
+      companyName:
+        type: string
+      companyType:
+        type: string
+    required:
+    - companyName
+    - companyType
+    type: object
+  supplier.ErrorResponse:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+    type: object
+  supplier.SupplierFullInfo:
+    properties:
+      capabilities:
+        additionalProperties:
+          type: integer
+        description: 生产能力
+        type: object
+      info:
+        allOf:
+        - $ref: '#/definitions/supplier.SupplierInfo'
+        description: 企业信息
+      qualification:
+        allOf:
+        - $ref: '#/definitions/supplier.SupplierQualification'
+        description: 资质信息
+    type: object
+  supplier.SupplierFullInfoResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/supplier.SupplierFullInfo'
+      message:
+        type: string
+    type: object
+  supplier.SupplierInfo:
+    properties:
+      companyName:
+        type: string
+      companyType:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        type: string
+    type: object
+  supplier.SupplierProfile:
+    properties:
+      companyName:
+        description: 企业名称
+        type: string
+      companyType:
+        description: 企业类型
+        type: string
+      createdAt:
+        type: string
+      id:
+        description: equals users.id
+        type: string
+      updatedAt:
+        type: string
+      userId:
+        description: 关联用户，唯一索引
+        type: string
+    type: object
+  supplier.SupplierProfileResponse:
+    properties:
+      code:
+        type: integer
+      data:
+        $ref: '#/definitions/supplier.SupplierProfile'
+      message:
+        type: string
+    type: object
+  supplier.SupplierQualification:
+    type: object
+  supplier.UpdateCapabilitiesRequest:
+    properties:
+      capabilities:
+        additionalProperties:
+          type: integer
+        type: object
+    required:
+    - capabilities
+    type: object
 info:
   contact: {}
-  description: 极绎贸易招投标系统对外接口
+  description: fantasy对外
   title: Fantasy Bounty API
   version: "1.0"
 paths:
+  /api/v1/auth/demo-login:
+    post:
+      consumes:
+      - application/json
+      description: 使用手机号 + 角色(supplier/client) 直接获取外部 JWT（不会发送验证码）
+      parameters:
+      - description: 登录参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.DemoLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/auth.DemoLoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/auth.ErrorResponse'
+      summary: Demo 手机号登录（仅测试用）
+      tags:
+      - auth
   /api/v1/auth/send-code:
     post:
       consumes:
@@ -501,163 +634,83 @@ paths:
       summary: 验证码登录/注册
       tags:
       - auth
-  /api/v1/bids:
-    get:
-      description: 根据赏金ID获取竞标列表
-      parameters:
-      - description: 赏金ID
-        in: query
-        name: bounty_id
-        required: true
-        type: integer
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 10
-        description: 每页数量
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/bid.BidListResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/bid.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/bid.ErrorResponse'
-      summary: 获取竞标列表
-      tags:
-      - bid
+  /api/v1/auth/wechat-login:
     post:
       consumes:
       - application/json
-      description: 为指定赏金创建竞标
+      description: 用前端临时 code 换取 openid，再查询内部系统中该 openid 绑定的供应商信息
       parameters:
-      - description: 竞标信息
-        in: body
-        name: bid
-        required: true
-        schema:
-          $ref: '#/definitions/bid.CreateBidRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/bid.BidResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/bid.ErrorResponse'
-      summary: 创建竞标
-      tags:
-      - bid
-  /api/v1/bids/{id}:
-    delete:
-      description: 删除指定竞标
-      parameters:
-      - description: 竞标ID (UUID)
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/bid.ErrorResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/bid.ErrorResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/bid.ErrorResponse'
-      summary: 删除竞标
-      tags:
-      - bid
-  /api/v1/bids/my:
-    get:
-      description: 获取当前用户的竞标列表
-      parameters:
-      - description: '状态筛选: draft, pending, in_progress, pending_acceptance, completed'
-        in: query
-        name: status
-        type: string
-      - default: 1
-        description: 页码
-        in: query
-        name: page
-        type: integer
-      - default: 10
-        description: 每页数量
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/bid.BidListResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/bid.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/bid.ErrorResponse'
-      summary: 获取我的竞标列表
-      tags:
-      - bid
-  /api/v1/internal/login:
-    post:
-      consumes:
-      - application/json
-      description: 将登录请求转发到内部系统，返回内部系统的token
-      parameters:
-      - description: 工号和密码
+      - description: 微信登录参数
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/auth.InternalLoginRequest'
+          $ref: '#/definitions/auth.WechatLoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            additionalProperties: true
-            type: object
+            $ref: '#/definitions/auth.WechatLoginResponse'
         "400":
           description: Bad Request
           schema:
             $ref: '#/definitions/auth.ErrorResponse'
-        "502":
-          description: Bad Gateway
-          schema:
-            $ref: '#/definitions/auth.ErrorResponse'
-      summary: 内部系统登录
+      summary: 微信小程序登录
       tags:
       - auth
-  /proxy/bind-wechat:
+  /api/v1/client/profile:
+    get:
+      description: 获取当前登录 client 的档案信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/client.ClientProfileResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/client.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/client.ErrorResponse'
+      summary: 获取客户档案
+      tags:
+      - client
+    post:
+      consumes:
+      - application/json
+      description: 创建或更新当前登录 client 的公司信息
+      parameters:
+      - description: 客户档案信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/client.CreateClientProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/client.ClientProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/client.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/client.ErrorResponse'
+      summary: 创建或更新客户档案
+      tags:
+      - client
+  /api/v1/proxy/supplier/bind-wechat:
     post:
       consumes:
       - application/json
@@ -683,7 +736,7 @@ paths:
       summary: 微信端绑定供应商
       tags:
       - proxy
-  /proxy/get-by-wechat:
+  /api/v1/proxy/supplier/get-by-wechat:
     post:
       consumes:
       - application/json
@@ -709,7 +762,7 @@ paths:
       summary: 根据 Openid 获取供应商信息
       tags:
       - proxy
-  /proxy/inquiry-detail:
+  /api/v1/proxy/supplier/inquiry-detail:
     post:
       consumes:
       - application/json
@@ -734,7 +787,7 @@ paths:
       summary: 供应商查看采购需求详情及报价情况
       tags:
       - proxy
-  /proxy/inquiry-query:
+  /api/v1/proxy/supplier/inquiry-query:
     post:
       consumes:
       - application/json
@@ -759,7 +812,33 @@ paths:
       summary: 查询供应商可报价的招标信息
       tags:
       - proxy
-  /proxy/quote-delete:
+  /api/v1/proxy/supplier/inquiry-quoted:
+    post:
+      consumes:
+      - application/json
+      description: 返回该供应商已提交过报价的询价单列表
+      parameters:
+      - description: 查询参数
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/proxy.InquiryBySupplierQuotedRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/proxy.InquiryBySupplierQuotedResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/proxy.BaseResponse'
+      summary: 查询供应商已报价的采购单
+      tags:
+      - proxy
+  /api/v1/proxy/supplier/quote-delete:
     post:
       consumes:
       - application/json
@@ -784,7 +863,7 @@ paths:
       summary: 撤回或删除供应商报价
       tags:
       - proxy
-  /proxy/quote-save:
+  /api/v1/proxy/supplier/quote-save:
     post:
       consumes:
       - application/json
@@ -809,4 +888,85 @@ paths:
       summary: 供应商提交或保存报价
       tags:
       - proxy
+  /api/v1/supplier/capabilities:
+    post:
+      consumes:
+      - application/json
+      description: 更新供应商的机器设备数量（增量更新）
+      parameters:
+      - description: 机器能力信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/supplier.UpdateCapabilitiesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/supplier.CapabilitiesResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/supplier.ErrorResponse'
+      summary: 更新机器能力
+      tags:
+      - supplier
+  /api/v1/supplier/full-info:
+    get:
+      description: 获取供应商的企业信息、资质和生产能力
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/supplier.SupplierFullInfoResponse'
+      summary: 获取供应商完整信息
+      tags:
+      - supplier
+  /api/v1/supplier/profile:
+    get:
+      description: 获取当前用户的供应商档案信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/supplier.SupplierProfileResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/supplier.ErrorResponse'
+      summary: 获取供应商档案
+      tags:
+      - supplier
+    post:
+      consumes:
+      - application/json
+      description: 创建或更新供应商的企业信息和机器能力
+      parameters:
+      - description: 供应商信息
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/supplier.CreateSupplierRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/supplier.SupplierProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/supplier.ErrorResponse'
+      summary: 创建/更新供应商档案
+      tags:
+      - supplier
 swagger: "2.0"

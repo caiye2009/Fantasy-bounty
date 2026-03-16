@@ -1,13 +1,65 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "极绎贸易招投标系统对外接口",
+        "description": "fantasy对外",
         "title": "Fantasy Bounty API",
         "contact": {},
         "version": "1.0"
     },
     "basePath": "/api/v1",
     "paths": {
+        "/api/v1/auth/demo-login": {
+            "post": {
+                "description": "使用手机号 + 角色(supplier/client) 直接获取外部 JWT（不会发送验证码）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Demo 手机号登录（仅测试用）",
+                "parameters": [
+                    {
+                        "description": "登录参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.DemoLoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/auth.DemoLoginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/auth.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/auth.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/auth.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/send-code": {
             "post": {
                 "description": "向手机号发送登录/注册验证码",
@@ -94,197 +146,9 @@
                 }
             }
         },
-        "/api/v1/bids": {
-            "get": {
-                "description": "根据赏金ID获取竞标列表",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "bid"
-                ],
-                "summary": "获取竞标列表",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "赏金ID",
-                        "name": "bounty_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 10,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/bid.BidListResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/bid.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/bid.ErrorResponse"
-                        }
-                    }
-                }
-            },
+        "/api/v1/auth/wechat-login": {
             "post": {
-                "description": "为指定赏金创建竞标",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "bid"
-                ],
-                "summary": "创建竞标",
-                "parameters": [
-                    {
-                        "description": "竞标信息",
-                        "name": "bid",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/bid.CreateBidRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/bid.BidResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/bid.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/bids/my": {
-            "get": {
-                "description": "获取当前用户的竞标列表",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "bid"
-                ],
-                "summary": "获取我的竞标列表",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "状态筛选: draft, pending, in_progress, pending_acceptance, completed",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "页码",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 10,
-                        "description": "每页数量",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/bid.BidListResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/bid.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/bid.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/bids/{id}": {
-            "delete": {
-                "description": "删除指定竞标",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "bid"
-                ],
-                "summary": "删除竞标",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "竞标ID (UUID)",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/bid.ErrorResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/bid.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/bid.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/internal/login": {
-            "post": {
-                "description": "将登录请求转发到内部系统，返回内部系统的token",
+                "description": "用前端临时 code 换取 openid，再查询内部系统中该 openid 绑定的供应商信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -294,15 +158,15 @@
                 "tags": [
                     "auth"
                 ],
-                "summary": "内部系统登录",
+                "summary": "微信小程序登录",
                 "parameters": [
                     {
-                        "description": "工号和密码",
+                        "description": "微信登录参数",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.InternalLoginRequest"
+                            "$ref": "#/definitions/auth.WechatLoginRequest"
                         }
                     }
                 ],
@@ -310,8 +174,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/auth.WechatLoginResponse"
                         }
                     },
                     "400": {
@@ -319,17 +182,87 @@
                         "schema": {
                             "$ref": "#/definitions/auth.ErrorResponse"
                         }
-                    },
-                    "502": {
-                        "description": "Bad Gateway",
+                    }
+                }
+            }
+        },
+        "/api/v1/client/profile": {
+            "get": {
+                "description": "获取当前登录 client 的档案信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "client"
+                ],
+                "summary": "获取客户档案",
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/auth.ErrorResponse"
+                            "$ref": "#/definitions/client.ClientProfileResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/client.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/client.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "创建或更新当前登录 client 的公司信息",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "client"
+                ],
+                "summary": "创建或更新客户档案",
+                "parameters": [
+                    {
+                        "description": "客户档案信息",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/client.CreateClientProfileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/client.ClientProfileResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/client.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/client.ErrorResponse"
                         }
                     }
                 }
             }
         },
-        "/proxy/bind-wechat": {
+        "/api/v1/proxy/supplier/bind-wechat": {
             "post": {
                 "description": "验证供应商身份并绑定 OpenId，成功后 isSucceed=true",
                 "consumes": [
@@ -369,7 +302,7 @@
                 }
             }
         },
-        "/proxy/get-by-wechat": {
+        "/api/v1/proxy/supplier/get-by-wechat": {
             "post": {
                 "description": "data 有数据=已绑定供应商；data 为空数组=未绑定；isSucceed=false 看 message",
                 "consumes": [
@@ -409,7 +342,7 @@
                 }
             }
         },
-        "/proxy/inquiry-detail": {
+        "/api/v1/proxy/supplier/inquiry-detail": {
             "post": {
                 "consumes": [
                     "application/json"
@@ -448,7 +381,7 @@
                 }
             }
         },
-        "/proxy/inquiry-query": {
+        "/api/v1/proxy/supplier/inquiry-query": {
             "post": {
                 "consumes": [
                     "application/json"
@@ -487,7 +420,47 @@
                 }
             }
         },
-        "/proxy/quote-delete": {
+        "/api/v1/proxy/supplier/inquiry-quoted": {
+            "post": {
+                "description": "返回该供应商已提交过报价的询价单列表",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "proxy"
+                ],
+                "summary": "查询供应商已报价的采购单",
+                "parameters": [
+                    {
+                        "description": "查询参数",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/proxy.InquiryBySupplierQuotedRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/proxy.InquiryBySupplierQuotedResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/proxy.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/proxy/supplier/quote-delete": {
             "post": {
                 "consumes": [
                     "application/json"
@@ -526,7 +499,7 @@
                 }
             }
         },
-        "/proxy/quote-save": {
+        "/api/v1/proxy/supplier/quote-save": {
             "post": {
                 "consumes": [
                     "application/json"
@@ -564,9 +537,178 @@
                     }
                 }
             }
+        },
+        "/api/v1/supplier/capabilities": {
+            "post": {
+                "description": "更新供应商的机器设备数量（增量更新）",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "supplier"
+                ],
+                "summary": "更新机器能力",
+                "parameters": [
+                    {
+                        "description": "机器能力信息",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/supplier.UpdateCapabilitiesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/supplier.CapabilitiesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/supplier.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/supplier/full-info": {
+            "get": {
+                "description": "获取供应商的企业信息、资质和生产能力",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "supplier"
+                ],
+                "summary": "获取供应商完整信息",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/supplier.SupplierFullInfoResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/supplier/profile": {
+            "get": {
+                "description": "获取当前用户的供应商档案信息",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "supplier"
+                ],
+                "summary": "获取供应商档案",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/supplier.SupplierProfileResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/supplier.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "创建或更新供应商的企业信息和机器能力",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "supplier"
+                ],
+                "summary": "创建/更新供应商档案",
+                "parameters": [
+                    {
+                        "description": "供应商信息",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/supplier.CreateSupplierRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/supplier.SupplierProfileResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/supplier.ErrorResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "auth.DemoLoginRequest": {
+            "type": "object",
+            "required": [
+                "phone",
+                "role"
+            ],
+            "properties": {
+                "phone": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "supplier",
+                        "client"
+                    ]
+                }
+            }
+        },
+        "auth.DemoLoginResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "isNew": {
+                    "type": "boolean"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "token": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
         "auth.ErrorResponse": {
             "type": "object",
             "properties": {
@@ -574,21 +716,6 @@
                     "type": "integer"
                 },
                 "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.InternalLoginRequest": {
-            "type": "object",
-            "required": [
-                "password",
-                "username"
-            ],
-            "properties": {
-                "password": {
-                    "type": "string"
-                },
-                "username": {
                     "type": "string"
                 }
             }
@@ -651,194 +778,118 @@
                 }
             }
         },
-        "bid.Bid": {
+        "auth.WechatLoginData": {
             "type": "object",
             "properties": {
-                "bidPrice": {
-                    "description": "投标价格",
-                    "type": "number"
+                "isBound": {
+                    "type": "boolean"
                 },
-                "bountyId": {
+                "openId": {
+                    "type": "string"
+                },
+                "supplierInfo": {
+                    "description": "内部系统 BC_Customer_GetByWeChat 返回的 data 数组，未绑定时为 []"
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.WechatLoginRequest": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "userInfo": {}
+            }
+        },
+        "auth.WechatLoginResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
                     "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/auth.WechatLoginData"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "client.ClientProfile": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "companyName": {
+                    "type": "string"
+                },
+                "contactName": {
+                    "type": "string"
                 },
                 "createdAt": {
                     "type": "string"
                 },
                 "id": {
+                    "description": "equals users.id",
                     "type": "string"
                 },
-                "knittedSpec": {
-                    "$ref": "#/definitions/bid.BidKnittedSpec"
-                },
-                "status": {
-                    "description": "pending, in_progress, pending_acceptance, completed",
+                "industry": {
                     "type": "string"
                 },
                 "updatedAt": {
                     "type": "string"
                 },
-                "username": {
-                    "description": "关联用户名",
+                "userId": {
+                    "description": "equals ID, kept for clarity",
                     "type": "string"
-                },
-                "wovenSpec": {
-                    "description": "关联规格 - 根据悬赏类型只会有一个有值",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/bid.BidWovenSpec"
-                        }
-                    ]
                 }
             }
         },
-        "bid.BidKnittedSpec": {
-            "type": "object",
-            "properties": {
-                "bidId": {
-                    "type": "string"
-                },
-                "deliveryMethod": {
-                    "description": "交货方式",
-                    "type": "string"
-                },
-                "greigeDeliveryDate": {
-                    "description": "胚布交期",
-                    "type": "string"
-                },
-                "greigeFabricType": {
-                    "description": "胚布类型（现货/定织）",
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "sizeWeight": {
-                    "description": "尺码（重量/皮重）",
-                    "type": "number"
-                }
-            }
-        },
-        "bid.BidListResponse": {
+        "client.ClientProfileResponse": {
             "type": "object",
             "properties": {
                 "code": {
                     "type": "integer"
                 },
                 "data": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/bid.Bid"
-                    }
-                },
-                "message": {
-                    "type": "string"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
-        "bid.BidResponse": {
-            "type": "object",
-            "properties": {
-                "code": {
-                    "type": "integer"
-                },
-                "data": {
-                    "$ref": "#/definitions/bid.Bid"
+                    "$ref": "#/definitions/client.ClientProfile"
                 },
                 "message": {
                     "type": "string"
                 }
             }
         },
-        "bid.BidWovenSpec": {
-            "type": "object",
-            "properties": {
-                "bidId": {
-                    "type": "string"
-                },
-                "deliveryMethod": {
-                    "description": "交货方式",
-                    "type": "string"
-                },
-                "greigeDeliveryDate": {
-                    "description": "胚布交期",
-                    "type": "string"
-                },
-                "greigeFabricType": {
-                    "description": "胚布类型（现货/定织）",
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "sizeLength": {
-                    "description": "尺码（长度）",
-                    "type": "number"
-                }
-            }
-        },
-        "bid.CreateBidKnittedSpecRequest": {
-            "type": "object",
-            "properties": {
-                "deliveryMethod": {
-                    "description": "竞标确认后 / 签订合同后 / 收到预付款后",
-                    "type": "string"
-                },
-                "greigeDeliveryDate": {
-                    "type": "string"
-                },
-                "greigeFabricType": {
-                    "description": "现货 / 定织",
-                    "type": "string"
-                },
-                "sizeWeight": {
-                    "type": "number"
-                }
-            }
-        },
-        "bid.CreateBidRequest": {
+        "client.CreateClientProfileRequest": {
             "type": "object",
             "required": [
-                "bidPrice",
-                "bountyId"
+                "address",
+                "companyName",
+                "contactName",
+                "industry"
             ],
             "properties": {
-                "bidPrice": {
-                    "type": "number"
+                "address": {
+                    "type": "string"
                 },
-                "bountyId": {
-                    "type": "integer"
+                "companyName": {
+                    "type": "string"
                 },
-                "knittedSpec": {
-                    "$ref": "#/definitions/bid.CreateBidKnittedSpecRequest"
+                "contactName": {
+                    "type": "string"
                 },
-                "wovenSpec": {
-                    "$ref": "#/definitions/bid.CreateBidWovenSpecRequest"
+                "industry": {
+                    "type": "string"
                 }
             }
         },
-        "bid.CreateBidWovenSpecRequest": {
-            "type": "object",
-            "properties": {
-                "deliveryMethod": {
-                    "description": "竞标确认后 / 签订合同后 / 收到预付款后",
-                    "type": "string"
-                },
-                "greigeDeliveryDate": {
-                    "type": "string"
-                },
-                "greigeFabricType": {
-                    "description": "现货 / 定织",
-                    "type": "string"
-                },
-                "sizeLength": {
-                    "type": "number"
-                }
-            }
-        },
-        "bid.ErrorResponse": {
+        "client.ErrorResponse": {
             "type": "object",
             "properties": {
                 "code": {
@@ -961,6 +1012,34 @@
                 "outData": {
                     "$ref": "#/definitions/proxy.GetByWeChatOutData"
                 },
+                "statusCode": {
+                    "type": "integer"
+                },
+                "time": {
+                    "type": "integer"
+                }
+            }
+        },
+        "proxy.InquiryBySupplierQuotedRequest": {
+            "type": "object",
+            "properties": {
+                "Supplier": {
+                    "type": "string",
+                    "example": "C001"
+                }
+            }
+        },
+        "proxy.InquiryBySupplierQuotedResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "isSucceed": {
+                    "type": "boolean"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "outData": {},
                 "statusCode": {
                     "type": "integer"
                 },
@@ -1210,6 +1289,179 @@
                 },
                 "time": {
                     "type": "integer"
+                }
+            }
+        },
+        "supplier.CapabilitiesResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "supplier.CreateSupplierRequest": {
+            "type": "object",
+            "required": [
+                "companyName",
+                "companyType"
+            ],
+            "properties": {
+                "capabilities": {
+                    "description": "机器能力 {a:1, b:2}",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "companyName": {
+                    "type": "string"
+                },
+                "companyType": {
+                    "type": "string"
+                }
+            }
+        },
+        "supplier.ErrorResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "supplier.SupplierFullInfo": {
+            "type": "object",
+            "properties": {
+                "capabilities": {
+                    "description": "生产能力",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
+                },
+                "info": {
+                    "description": "企业信息",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/supplier.SupplierInfo"
+                        }
+                    ]
+                },
+                "qualification": {
+                    "description": "资质信息",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/supplier.SupplierQualification"
+                        }
+                    ]
+                }
+            }
+        },
+        "supplier.SupplierFullInfoResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/supplier.SupplierFullInfo"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "supplier.SupplierInfo": {
+            "type": "object",
+            "properties": {
+                "companyName": {
+                    "type": "string"
+                },
+                "companyType": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "userId": {
+                    "type": "string"
+                }
+            }
+        },
+        "supplier.SupplierProfile": {
+            "type": "object",
+            "properties": {
+                "companyName": {
+                    "description": "企业名称",
+                    "type": "string"
+                },
+                "companyType": {
+                    "description": "企业类型",
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "description": "equals users.id",
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "userId": {
+                    "description": "关联用户，唯一索引",
+                    "type": "string"
+                }
+            }
+        },
+        "supplier.SupplierProfileResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "data": {
+                    "$ref": "#/definitions/supplier.SupplierProfile"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "supplier.SupplierQualification": {
+            "type": "object"
+        },
+        "supplier.UpdateCapabilitiesRequest": {
+            "type": "object",
+            "required": [
+                "capabilities"
+            ],
+            "properties": {
+                "capabilities": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer"
+                    }
                 }
             }
         }

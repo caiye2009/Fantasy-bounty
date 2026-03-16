@@ -39,6 +39,111 @@ type Handler struct {
 	internalAPIURL   string                 // 内部系统基础 URL
 }
 
+type DemoLoginRequest struct {
+	Phone string `json:"phone" binding:"required"`
+	Role  string `json:"role" binding:"required,oneof=supplier client"`
+}
+
+type DemoLoginResponse struct {
+	Code     int    `json:"code"`
+	Message  string `json:"message"`
+	Token    string `json:"token"`
+	UserID   string `json:"userId"`
+	Username string `json:"username"`
+	Role     string `json:"role"`
+	IsNew    bool   `json:"isNew"`
+}
+
+// DemoLogin demo 手机号登录（不发验证码）
+// @Summary Demo 手机号登录（仅测试用）
+// @Description 使用手机号 + 角色(supplier/client) 直接获取外部 JWT（不会发送验证码）
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param request body DemoLoginRequest true "登录参数"
+// @Success 200 {object} DemoLoginResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
+// @Router /api/v1/auth/demo-login [post]
+func (h *Handler) DemoLogin(c *gin.Context) {
+	var req DemoLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    http.StatusBadRequest,
+			Message: "请求参数错误: " + err.Error(),
+		})
+		return
+	}
+
+	ctx := context.Background()
+	isNew := false
+
+	u, err := h.userService.GetUserByPhone(ctx, req.Phone)
+	if err != nil {
+		u, err = h.userService.CreateUser(ctx, &user.CreateUserRequest{
+			Phone: req.Phone,
+			Role:  req.Role,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Code:    http.StatusInternalServerError,
+				Message: "创建用户失败: " + err.Error(),
+			})
+			return
+		}
+		isNew = true
+	} else if u.Role != req.Role {
+		c.JSON(http.StatusConflict, ErrorResponse{
+			Code:    http.StatusConflict,
+			Message: "该手机号已绑定其他角色",
+		})
+		return
+	}
+
+	if u.Status != "active" {
+		c.JSON(http.StatusForbidden, ErrorResponse{
+			Code:    http.StatusForbidden,
+			Message: "账号已被禁用",
+		})
+		return
+	}
+
+	_ = h.userService.UpdateLastLogin(ctx, u.ID)
+
+	token, err := h.jwtService.GenerateToken(u.ID, u.Username, u.Role)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    http.StatusInternalServerError,
+			Message: "生成Token失败: " + err.Error(),
+		})
+		return
+	}
+
+	if rc := middleware.GetRequestContext(c); rc != nil {
+		rc.Action = "auth.demo_login"
+		rc.Resource = "auth"
+		rc.UserID = u.ID
+		rc.Username = u.Username
+		rc.Role = u.Role
+		rc.Detail = map[string]any{
+			"phone_masked": crypto.MaskPhone(req.Phone),
+			"role":         u.Role,
+			"is_new_user":  isNew,
+		}
+	}
+
+	c.JSON(http.StatusOK, DemoLoginResponse{
+		Code:     http.StatusOK,
+		Message:  "登录成功",
+		Token:    token,
+		UserID:   u.ID,
+		Username: u.Username,
+		Role:     u.Role,
+		IsNew:    isNew,
+	})
+}
+
 // NewHandler 创建新的 handler 实例
 func NewHandler(
 	jwtService *jwt.JWTService,
@@ -216,7 +321,7 @@ func (h *Handler) VerifyCode(c *gin.Context) {
 	_ = h.userService.UpdateLastLogin(ctx, u.ID)
 
 	// 生成 JWT token（只使用 username）
-	token, err := h.jwtService.GenerateToken(u.Username)
+	token, err := h.jwtService.GenerateToken(u.ID, u.Username, u.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,
@@ -307,7 +412,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	}
 
 	// 签发新 token
-	newToken, err := h.jwtService.GenerateToken(claims.Username)
+	newToken, err := h.jwtService.GenerateToken(claims.UserID, claims.Username, claims.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,
@@ -328,95 +433,6 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 		Message: "token 刷新成功",
 		Token:   newToken,
 	})
-}
-
-// InternalLogin 内部系统登录代理
-// @Summary 内部系统登录
-// @Description 将登录请求转发到内部系统，返回内部系统的token
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body InternalLoginRequest true "工号和密码"
-// @Success 200 {object} map[string]interface{}
-// @Failure 400 {object} ErrorResponse
-// @Failure 502 {object} ErrorResponse
-// @Router /api/v1/internal/login [post]
-func (h *Handler) InternalLogin(c *gin.Context) {
-	var req InternalLoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Code:    http.StatusBadRequest,
-			Message: "请求参数错误: " + err.Error(),
-		})
-		return
-	}
-
-	// 获取内部系统配置
-	internalAPIURL := os.Getenv("INTERNAL_API_URL")
-	internalAuthPath := os.Getenv("INTERNAL_AUTH_PATH")
-	if internalAPIURL == "" || internalAuthPath == "" {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Code:    http.StatusInternalServerError,
-			Message: "内部系统配置错误",
-		})
-		return
-	}
-
-	// 构造转发请求
-	loginURL := internalAPIURL + internalAuthPath
-	body, err := json.Marshal(req)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Code:    http.StatusInternalServerError,
-			Message: "请求序列化失败",
-		})
-		return
-	}
-
-	// 发送请求到内部系统
-	httpReq, err := http.NewRequest(http.MethodPost, loginURL, bytes.NewReader(body))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Code:    http.StatusInternalServerError,
-			Message: "创建请求失败",
-		})
-		return
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		c.JSON(http.StatusBadGateway, ErrorResponse{
-			Code:    http.StatusBadGateway,
-			Message: "内部系统连接失败: " + err.Error(),
-		})
-		return
-	}
-	defer resp.Body.Close()
-
-	// 读取响应
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Code:    http.StatusInternalServerError,
-			Message: "读取响应失败",
-		})
-		return
-	}
-
-	// 设置审计信息
-	if rc := middleware.GetRequestContext(c); rc != nil {
-		rc.Action = "auth.internal_login"
-		rc.Resource = "auth"
-		rc.Detail = map[string]any{
-			"username":    req.Username,
-			"status_code": resp.StatusCode,
-		}
-	}
-
-	// 透传内部系统的响应（包括状态码和body）
-	c.Data(resp.StatusCode, "application/json", respBody)
 }
 
 // WechatLogin 微信小程序登录
@@ -552,7 +568,7 @@ func (h *Handler) WechatLogin(c *gin.Context) {
 	supplierData, _ := json.Marshal(internalResp.Data)
 
 	// Step 3: 生成 JWT（以 username 作为标识）
-	token, err := h.jwtService.GenerateToken(u.Username)
+	token, err := h.jwtService.GenerateToken(u.ID, u.Username, u.Role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    http.StatusInternalServerError,

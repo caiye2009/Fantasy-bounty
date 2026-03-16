@@ -12,9 +12,10 @@ type User struct {
 	Username     string         `json:"username" gorm:"type:varchar(20);uniqueIndex"`            // 唯一用户名（自动生成6位）
 	OpenID       string         `json:"-" gorm:"type:varchar(64);uniqueIndex"`                  // 微信openid
 	UnionID      string         `json:"-" gorm:"type:varchar(64)"`                              // 微信unionid
+	Role         string         `json:"role" gorm:"type:varchar(20);not null;default:'supplier'"` // supplier, client
 	Mobile       string         `json:"mobile" gorm:"type:varchar(20)"`                         // 手机号
 	CustomerCode string         `json:"customerCode" gorm:"type:varchar(50)"`                   // 供应商编码
-	PhoneHash    string         `json:"-" gorm:"type:varchar(64)"`                              // 手机号哈希（用于查询索引）
+	PhoneHash    string         `json:"-" gorm:"type:varchar(64);uniqueIndex"`                  // 手机号哈希（用于查询索引）- 全局唯一
 	PhoneEncrypted string       `json:"-" gorm:"type:varchar(255)"`                             // 手机号加密存储（用于解密显示）
 	Phone        string         `json:"phone" gorm:"-"`                                         // 解密后的手机号（不存数据库）
 	PhoneMasked  string         `json:"phoneMasked" gorm:"-"`                                   // 脱敏手机号（不存数据库）
@@ -34,6 +35,7 @@ type CreateUserRequest struct {
 	Phone       string `json:"phone"`        // 手机号（可选）
 	OpenID      string `json:"openid"`       // 微信openid（可选）
 	UnionID     string `json:"unionid"`      // 微信unionid（可选）
+	Role        string `json:"role"`         // supplier/client（可选，默认 supplier）
 	Mobile      string `json:"mobile"`       // 手机号（从内部系统获取）
 	CustomerCode string `json:"customerCode"` // 供应商编码
 }

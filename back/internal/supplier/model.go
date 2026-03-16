@@ -9,11 +9,11 @@ import (
 
 // SupplierProfile 供应商档案
 type SupplierProfile struct {
-	ID           string         `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	UserID       string         `json:"userId" gorm:"type:uuid;not null;uniqueIndex"` // 关联用户，唯一索引
-	CompanyType  string         `json:"companyType" gorm:"type:varchar(50)"`          // 企业类型
-	CompanyName  string         `json:"companyName" gorm:"type:varchar(255)"`         // 企业名称
-	Capabilities datatypes.JSON `json:"capabilities" gorm:"type:jsonb"`                // 机器能力 {a:1, b:2}
+	ID           string         `json:"id" gorm:"type:uuid;primaryKey"`                 // equals users.id
+	UserID       string         `json:"userId" gorm:"type:uuid;not null;uniqueIndex"`  // 关联用户，唯一索引
+	CompanyType  string         `json:"companyType" gorm:"type:varchar(50)"`           // 企业类型
+	CompanyName  string         `json:"companyName" gorm:"type:varchar(255)"`          // 企业名称
+	Capabilities datatypes.JSON `json:"-" gorm:"type:jsonb"`                           // 存储层字段，不直接在 swagger 中展开
 	CreatedAt    time.Time      `json:"createdAt" gorm:"autoCreateTime"`
 	UpdatedAt    time.Time      `json:"updatedAt" gorm:"autoUpdateTime"`
 	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index"`

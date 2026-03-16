@@ -3,6 +3,7 @@ package proxy
 import (
 	"back/pkg/internal_token"
 	"back/pkg/jwt"
+	"back/pkg/middleware"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -22,15 +23,19 @@ func (p *InternalProxy) forwardToInternal(c *gin.Context, code string, pars map[
 	start := time.Now()
 	log.Printf("[PROXY] ========== 转发请求: %s ==========", code)
 
-	// 获取内部 token
-	internalToken, err := p.tokenManager.GetToken()
-	if err != nil {
-		log.Printf("[PROXY] 获取内部token失败: %v", err)
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"code":    http.StatusServiceUnavailable,
-			"message": "获取内部系统token失败",
-		})
-		return
+	// 获取内部 token（由中间件预先注入；兜底再向 manager 获取）
+	internalToken, ok := middleware.GetInternalToken(c)
+	if !ok {
+		var err error
+		internalToken, err = p.tokenManager.GetToken()
+		if err != nil {
+			log.Printf("[PROXY] 获取内部token失败: %v", err)
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"code":    http.StatusServiceUnavailable,
+				"message": "获取内部系统token失败",
+			})
+			return
+		}
 	}
 
 	// 组装请求体
@@ -107,7 +112,7 @@ func (p *InternalProxy) forwardToInternal(c *gin.Context, code string, pars map[
 // @Param        request  body      BindWeChatRequest  true  "绑定参数"
 // @Success      200      {object}  BindWeChatResponse
 // @Failure      400      {object}  BaseResponse
-// @Router       /proxy/bind-wechat [post]
+// @Router       /api/v1/proxy/supplier/bind-wechat [post]
 func (p *InternalProxy) BindWeChatHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body map[string]interface{}
@@ -131,7 +136,7 @@ func (p *InternalProxy) BindWeChatHandler() gin.HandlerFunc {
 // @Param        request  body      GetByWeChatRequest  true  "查询参数"
 // @Success      200      {object}  GetByWeChatResponse
 // @Failure      400      {object}  BaseResponse
-// @Router       /proxy/get-by-wechat [post]
+// @Router       /api/v1/proxy/supplier/get-by-wechat [post]
 func (p *InternalProxy) GetByWeChatHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body map[string]interface{}
@@ -151,7 +156,7 @@ func (p *InternalProxy) GetByWeChatHandler() gin.HandlerFunc {
 // @Param        request  body      InquiryQueryRequest  true  "查询参数"
 // @Success      200      {object}  InquiryQueryResponse
 // @Failure      400      {object}  BaseResponse
-// @Router       /proxy/inquiry-query [post]
+// @Router       /api/v1/proxy/supplier/inquiry-query [post]
 func (p *InternalProxy) InquiryQueryHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body map[string]interface{}
@@ -171,7 +176,7 @@ func (p *InternalProxy) InquiryQueryHandler() gin.HandlerFunc {
 // @Param        request  body      InquiryDetailRequest  true  "查询参数"
 // @Success      200      {object}  InquiryDetailResponse
 // @Failure      400      {object}  BaseResponse
-// @Router       /proxy/inquiry-detail [post]
+// @Router       /api/v1/proxy/supplier/inquiry-detail [post]
 func (p *InternalProxy) InquiryDetailHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body map[string]interface{}
@@ -193,7 +198,7 @@ func (p *InternalProxy) InquiryDetailHandler() gin.HandlerFunc {
 // @Param        request  body      QuoteDeleteRequest  true  "操作参数"
 // @Success      200      {object}  QuoteDeleteResponse
 // @Failure      400      {object}  BaseResponse
-// @Router       /proxy/quote-delete [post]
+// @Router       /api/v1/proxy/supplier/quote-delete [post]
 func (p *InternalProxy) QuoteDeleteHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body map[string]interface{}
@@ -216,7 +221,7 @@ func (p *InternalProxy) QuoteDeleteHandler() gin.HandlerFunc {
 // @Param        request  body      InquiryBySupplierQuotedRequest  true  "查询参数"
 // @Success      200      {object}  InquiryBySupplierQuotedResponse
 // @Failure      400      {object}  BaseResponse
-// @Router       /proxy/inquiry-quoted [post]
+// @Router       /api/v1/proxy/supplier/inquiry-quoted [post]
 func (p *InternalProxy) InquiryBySupplierQuotedHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body map[string]interface{}
@@ -236,7 +241,7 @@ func (p *InternalProxy) InquiryBySupplierQuotedHandler() gin.HandlerFunc {
 // @Param        request  body      QuoteSaveRequest  true  "报价参数"
 // @Success      200      {object}  QuoteSaveResponse
 // @Failure      400      {object}  BaseResponse
-// @Router       /proxy/quote-save [post]
+// @Router       /api/v1/proxy/supplier/quote-save [post]
 func (p *InternalProxy) QuoteSaveHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var body map[string]interface{}

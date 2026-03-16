@@ -75,6 +75,7 @@ func (r *repository) UpdateCapabilities(ctx context.Context, userID string, capa
 
 	// 创建新记录（只有capabilities，没有其他基本信息）
 	profile := &SupplierProfile{
+		ID:          userID,
 		UserID:      userID,
 		Capabilities: capabilitiesJSON,
 		CreatedAt:   time.Now(),

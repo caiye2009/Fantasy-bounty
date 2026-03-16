@@ -14,7 +14,9 @@ var (
 
 // Claims JWT Claims
 type Claims struct {
+	UserID   string `json:"user_id"`
 	Username string `json:"username"`
+	Role     string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -35,10 +37,12 @@ func NewJWTService(secretKey, issuer string, expiry time.Duration) *JWTService {
 }
 
 // GenerateToken 生成JWT token
-func (s *JWTService) GenerateToken(username string) (string, error) {
+func (s *JWTService) GenerateToken(userID, username, role string) (string, error) {
 	now := time.Now()
 	claims := Claims{
+		UserID:   userID,
 		Username: username,
+		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.issuer,
 			IssuedAt:  jwt.NewNumericDate(now),

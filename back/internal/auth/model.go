@@ -1,7 +1,5 @@
 package auth
 
-import "encoding/json"
-
 // SendCodeRequest 发送验证码请求
 type SendCodeRequest struct {
 	Phone string `json:"phone" binding:"required"`
@@ -64,10 +62,10 @@ type wechatSessionResult struct {
 
 // WechatLoginData 微信登录响应 data 字段
 type WechatLoginData struct {
-	Token        string          `json:"token"`
-	OpenID       string          `json:"openId"`
-	IsBound      bool            `json:"isBound"`
-	SupplierInfo json.RawMessage `json:"supplierInfo"` // 内部系统 BC_Customer_GetByWeChat 返回的 data 数组，未绑定时为 []
+	Token        string      `json:"token"`
+	OpenID       string      `json:"openId"`
+	IsBound      bool        `json:"isBound"`
+	SupplierInfo interface{} `json:"supplierInfo"` // 内部系统 BC_Customer_GetByWeChat 返回的 data 数组，未绑定时为 []
 }
 
 // WechatLoginResponse 微信登录响应

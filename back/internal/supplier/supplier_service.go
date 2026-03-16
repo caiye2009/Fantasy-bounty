@@ -39,6 +39,7 @@ func (s *service) CreateOrUpdateProfile(ctx context.Context, userID string, req 
 	}
 
 	profile := &SupplierProfile{
+		ID:          userID,
 		UserID:      userID,
 		CompanyType: req.CompanyType,
 		CompanyName: req.CompanyName,

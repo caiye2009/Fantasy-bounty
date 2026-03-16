@@ -203,19 +203,11 @@ func (h *Handler) GetFullInfo(c *gin.Context) {
 
 // getUserIDFromContext 从上下文中获取用户ID
 func (h *Handler) getUserIDFromContext(c *gin.Context) string {
-	// 从JWT中间件中获取username
 	rc := middleware.GetRequestContext(c)
-	if rc == nil || rc.Username == "" {
+	if rc == nil || rc.UserID == "" {
 		return ""
 	}
-
-	// 通过username查询用户信息
-	user, err := h.userService.GetUserByUsername(c.Request.Context(), rc.Username)
-	if err != nil {
-		return ""
-	}
-
-	return user.ID
+	return rc.UserID
 }
 
 // setAuditInfo 设置审计信息

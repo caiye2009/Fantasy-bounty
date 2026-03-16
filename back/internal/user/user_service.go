@@ -68,10 +68,19 @@ func (s *service) decryptUser(u *User) error {
 }
 
 func (s *service) CreateUser(ctx context.Context, req *CreateUserRequest) (*User, error) {
+	role := req.Role
+	if role == "" {
+		role = "supplier"
+	}
+	if role != "supplier" && role != "client" {
+		return nil, errors.New("invalid role")
+	}
+
 	user := &User{
 		Username:     generateUsername(),
 		OpenID:       req.OpenID,
 		UnionID:      req.UnionID,
+		Role:         role,
 		Mobile:       req.Mobile,
 		CustomerCode: req.CustomerCode,
 		Status:       "active",

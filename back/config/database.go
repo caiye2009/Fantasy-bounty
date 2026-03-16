@@ -2,6 +2,7 @@ package config
 
 import (
 	"back/internal/audit"
+	"back/internal/client"
 	"back/internal/supplier"
 	"back/internal/user"
 	"fmt"
@@ -44,17 +45,17 @@ func InitDatabase() error {
 
 	fmt.Println("Database connection established, running AutoMigrate...")
 
-	// 自动迁移数据库表
+	// 自动迁移数据库表（仅依赖 GORM 模型定义，不手动创建索引）
 	if err := DB.AutoMigrate(
 		&user.User{},
 		&supplier.SupplierProfile{},
+		&client.ClientProfile{},
 		&audit.AuditLog{},
 	); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
 	fmt.Println("AutoMigrate completed successfully - tables created/updated")
-	fmt.Println("Database connected successfully")
 	return nil
 }
 

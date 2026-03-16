@@ -1,6 +1,6 @@
 // @title           Fantasy Bounty API
 // @version         1.0
-// @description     极绎贸易招投标系统对外接口
+// @description     fantasy对外
 // @basePath        /api/v1
 
 package main
